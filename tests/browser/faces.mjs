@@ -52,6 +52,38 @@ check('M_face_recall_group_gap', gap, gap <= T.metrics.M_face_recall_group_gap.m
 const fp = Object.values(groups).reduce((n, g) => n + g.fp, 0); check('false_outlines', fp, fp === 0);
 const meshOk = first.out.every((o) => o.mesh.every((m) => m >= 468)); check('mesh_468_points', meshOk, meshOk);
 const slow = Math.max(...first.out.map((o) => o.ms)); console.log('max detect ms (software GPU)', slow);
+// landmark remap through crop & rotate vs re-detection (single-face photos)
+{
+  const page = await ctx.newPage(); await page.goto(base);
+  const ids = manifest.filter((p) => p.faces === 1).slice(0, 8).map((p) => p.file);
+  // small rotations only: re-detecting a face turned 90 degrees is itself unreliable, so it is not a fair reference
+  // (flips are excluded: a mirrored mesh has left/right indices swapped, so index-wise comparison is meaningless)
+  const geos = [{ rot90: 0, flipH: false, flipV: false, angle: 9, aspect: null }, { rot90: 0, flipH: false, flipV: false, angle: -14, aspect: 1 }, { rot90: 0, flipH: false, flipV: false, angle: 0, aspect: 0.8 }];
+  const errs = await page.evaluate(async ({ ids, geos }) => {
+    const t = window.__diiTest, out = [];
+    for (const file of ids) {
+      const blob = await (await fetch('/testdata/' + file)).blob();
+      const img = await t.loadImage(blob, file);
+      const big = (fs) => fs.sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3])[0];
+      const f0 = big(await t.detectFaces(img.preview)); if (!f0) { out.push({ file, miss: true }); continue; }
+      for (const g of geos) {
+        const res = await t.exportImage(img, { format: 'png', quality: 100, geometry: g });
+        const bmp = await createImageBitmap(res.blob, { colorSpaceConversion: 'none' });
+        const f1 = big(await t.detectFaces(bmp)); if (!f1) { out.push({ file, g: g.angle, miss: true }); continue; }
+        const m = t.sourceToOut(g, img.width, img.height, res.width, res.height);
+        const k = img.previewScale; let e = 0, n = 0;
+        for (let i = 0; i < Math.min(f0.mesh.length, f1.mesh.length, 468); i++) { const [x, y] = t.apply(m, f0.mesh[i][0] / k, f0.mesh[i][1] / k); e += Math.hypot(x - f1.mesh[i][0], y - f1.mesh[i][1]); n++; }
+        out.push({ file, g: g.angle, aspect: g.aspect, err: e / n / f1.box[2], box0: f0.box.map(Math.round), box1: f1.box.map(Math.round), out: [res.width, res.height] });
+      }
+    }
+    return out;
+  }, { ids, geos });
+  const ok = errs.filter((e) => !e.miss); const mean = ok.reduce((a, e) => a + e.err, 0) / ok.length;
+  console.log('remap detail', JSON.stringify(errs.map((e) => e.miss ? 'miss' : +e.err.toFixed(4))));
+  for (const e of errs) if (e.err > 0.03) console.log('  large', JSON.stringify(e));
+  check('M_landmark_remap_error_frac_fw', mean, mean <= T.metrics.M_landmark_remap_error_frac_fw.max, { n: ok.length, misses: errs.length - ok.length });
+  await page.close();
+}
 const second = await run(true);
 check('M_model_second_load_network_requests', second.modelReqs.length, second.modelReqs.length === 0, { reqs: second.modelReqs });
 check('no_page_errors', [...first.errs, ...second.errs].slice(0, 3), first.errs.length + second.errs.length === 0);

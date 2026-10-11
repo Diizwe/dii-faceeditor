@@ -9,4 +9,6 @@ createRoot(document.getElementById('root')!).render(<App />);
 import { useStore } from './store';
 import { exportImage } from './core/export';
 import { detectFaces } from './core/faces';
-(window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage, detectFaces };
+import { loadImage } from './core/image';
+import { sourceToOut, outputSize, apply } from './core/geometry';
+(window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage, detectFaces, loadImage, sourceToOut, outputSize, apply };

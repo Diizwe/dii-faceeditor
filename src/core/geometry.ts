@@ -80,3 +80,14 @@ export function isInside(g: Geometry, srcW: number, srcH: number, eps = 0.5): bo
     return u >= -eps && v >= -eps && u <= srcW + eps && v <= srcH + eps;
   });
 }
+
+export function invert(m: Affine): Affine {
+  const det = m[0] * m[4] - m[1] * m[3];
+  const a = m[4] / det, b = -m[1] / det, d = -m[3] / det, e = m[0] / det;
+  return [a, b, -(a * m[2] + b * m[5]), d, e, -(d * m[2] + e * m[5])];
+}
+
+/** Map points given in source pixels to output pixels (landmark remap through crop/rotate; never re-detected). */
+export function sourceToOut(g: Geometry, srcW: number, srcH: number, outW: number, outH: number): Affine {
+  return invert(outToSource(g, srcW, srcH, outW, outH));
+}

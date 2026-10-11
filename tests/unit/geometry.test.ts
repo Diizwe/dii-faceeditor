@@ -47,3 +47,15 @@ describe('geometry', () => {
     expect(apply(m, 10, 10)).toEqual([20, 20]);
   });
 });
+
+import { invert, sourceToOut } from '../../src/core/geometry';
+describe('inverse', () => {
+  it('sourceToOut inverts outToSource for rotated, flipped crops', () => {
+    const g: Geometry = { rot90: 1, flipH: true, flipV: false, angle: 12, aspect: 0.8 };
+    const [w, h] = outputSize(g, W, H);
+    const f = outToSource(g, W, H, w, h), b = sourceToOut(g, W, H, w, h);
+    const [sx, sy] = apply(f, 33, 71); const [ox, oy] = apply(b, sx, sy);
+    expect(ox).toBeCloseTo(33, 6); expect(oy).toBeCloseTo(71, 6);
+    expect(invert(invert(f)).map((v) => +v.toFixed(6))).toEqual(f.map((v) => +v.toFixed(6)));
+  });
+});
