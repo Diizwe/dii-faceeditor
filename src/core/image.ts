@@ -68,7 +68,7 @@ export async function loadImage(file: Blob, name = 'photo'): Promise<LoadedImage
   let preview: ImageBitmap;
   if (k === 1) preview = full;
   else {
-    preview = await createImageBitmap(full, { resizeWidth: Math.round(width * k), resizeHeight: Math.round(height * k), resizeQuality: 'high', colorSpaceConversion: 'none' });
+    preview = await createImageBitmap(full, { resizeWidth: Math.round(width * k), resizeHeight: Math.round(height * k), resizeQuality: 'high' }); // no colorSpaceConversion here: passing 'none' on a bitmap that was already converted would silently revert it to the raw profile values
     full.close();
   }
   if (mode === 'other') icc = null;

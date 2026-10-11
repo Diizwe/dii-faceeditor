@@ -51,8 +51,9 @@ window.H.parity = async (geometry, ops) => {
   g.drawImage(bmp, 0, 0, pv.w, pv.h); const ex = g.getImageData(0, 0, pv.w, pv.h).data;
   const N = pv.w * pv.h, d = []; let sum = 0; const yp = new Float32Array(N), ye = new Float32Array(N);
   for (let i = 0; i < N; i++) { let m = 0; for (let k = 0; k < 3; k++) { const v = Math.abs(Math.round(pv.data[i * 4 + k] * 255) - ex[i * 4 + k]); sum += v; m = Math.max(m, v); } d.push(m); yp[i] = 255 * (0.2126 * pv.data[i * 4] + 0.7152 * pv.data[i * 4 + 1] + 0.0722 * pv.data[i * 4 + 2]); ye[i] = 0.2126 * ex[i * 4] + 0.7152 * ex[i * 4 + 1] + 0.0722 * ex[i * 4 + 2]; }
+  let bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1, nbad = 0; for (let i = 0; i < N; i++) if (d[i] > 8) { const x = i % pv.w, y = (i / pv.w) | 0; bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); nbad++; }
   const sorted = Float32Array.from(d).sort(); 
-  return { mean: sum / (N * 3), p99: sorted[Math.floor(N * 0.99)], max: sorted[N - 1], ssim: window.H.ssim(yp, ye, pv.w, pv.h), size: [res.width, res.height, pv.w, pv.h], tiles: res.tiles };
+  return { mean: sum / (N * 3), p99: sorted[Math.floor(N * 0.99)], max: sorted[N - 1], ssim: window.H.ssim(yp, ye, pv.w, pv.h), size: [res.width, res.height, pv.w, pv.h], tiles: res.tiles, bad: { n: nbad, box: [bx0, by0, bx1, by1] } };
 };
 
 // Paint a synthetic blemish (soft dark-red spot) on a skin pixel of the photo and reload the result as a lossless image.

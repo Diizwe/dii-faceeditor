@@ -61,7 +61,11 @@ export function rasterIris(mesh: Pt[], w: number, h: number, map: (x: number, y:
   if (mesh.length < 478) return null;
   const c = canvasOf(w, h), g = c.getContext('2d') as CanvasRenderingContext2D;
   g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
-  for (const [centre, rim, eye] of [[IRIS_R, [469, 470, 471, 472], EYE_R], [IRIS_L, [474, 475, 476, 477], EYE_L]] as const) {
+  const centroid = (idx: number[]) => [idx.reduce((a, i) => a + mesh[i][0], 0) / idx.length, idx.reduce((a, i) => a + mesh[i][1], 0) / idx.length];
+  for (const [centre, rim] of [[IRIS_R, [469, 470, 471, 472]], [IRIS_L, [474, 475, 476, 477]]] as const) {
+    // pair each iris with the nearer eye outline (the model's left/right numbering is not reliable across versions)
+    const [ix, iy] = [mesh[centre][0], mesh[centre][1]];
+    const eye = [EYE_L, EYE_R].map((e) => ({ e, d: Math.hypot(centroid(e)[0] - ix, centroid(e)[1] - iy) })).sort((a, b) => a.d - b.d)[0].e;
     const [cx, cy] = map(mesh[centre][0], mesh[centre][1]);
     const rad = rim.reduce((a, i) => { const [x, y] = map(mesh[i][0], mesh[i][1]); return a + Math.hypot(x - cx, y - cy); }, 0) / rim.length;
     g.save(); g.beginPath();

@@ -135,7 +135,8 @@ void main(){
   float yellow = smoothstep(20.0, 35.0, hue) * (1.0 - smoothstep(80.0, 95.0, hue)) * smoothstep(0.06, 0.14, dd / max(mx, 1e-4));
   float bright = smoothstep(0.32, 0.5, Y);   // gums, lips and shadow inside the mouth are dark or red and stay untouched
   float w = clamp(m, 0.0, 1.0) * yellow * bright * uS;
-  vec3 d = (c - Y) * (1.0 - 0.7 * w);
+  // chroma shrinks fast at low strength and saturates at 65%, so even at 100 the teeth keep a warm tint instead of turning grey
+  vec3 d = (c - Y) * (1.0 - 0.65 * (1.0 - (1.0 - w) * (1.0 - w)));
   float Y2 = Y + 0.10 * w * (1.0 - Y);
   o = vec4(clamp(Y2 + d, 0.0, 1.0), 1.0);
 }`;
@@ -334,7 +335,7 @@ export class Renderer {
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = this.work;
-    if (!plan.smooth && !plan.light) return;
+    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes) return;
     this.edited ??= this.target(w, h, true, true);
     let cur: Target = this.work;
     const flip = this.temp(3, w, h, true);

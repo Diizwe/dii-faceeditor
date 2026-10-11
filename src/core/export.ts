@@ -40,7 +40,7 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   const skin = E?.face ? skinStats(img.preview, E.face.mesh as [number, number, number][], E.face.box[2]) : null;
   const full = await decodeFull(img);
   const patches: Patch[] = o.heal?.length ? buildPatches(full, o.heal, img.colorMode) : [];
-  const crop = async (b: { x0: number; y0: number; w: number; h: number }) => applyPatches(await createImageBitmap(full, b.x0, b.y0, Math.max(1, b.w), Math.max(1, b.h), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' }), b.x0, b.y0, patches, img.colorMode);
+  const crop = async (b: { x0: number; y0: number; w: number; h: number }) => applyPatches(await createImageBitmap(full, b.x0, b.y0, Math.max(1, b.w), Math.max(1, b.h), { premultiplyAlpha: 'none' }), b.x0, b.y0, patches, img.colorMode);
   try {
     // shrink tile until every tile's source bounding box fits the texture limit
     const bbox = (tx: number, ty: number, tw: number, th: number) => {
