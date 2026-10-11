@@ -2,9 +2,12 @@
 export interface Control { tool: string; id: string; label: string; min: number; max: number; step: number; default: number; unit?: string; }
 
 export const CONTROLS: Control[] = [
+  { tool: 'whiten', id: 'strength', label: 'Whiten', min: 0, max: 100, step: 1, default: 40 },
+  { tool: 'eyes', id: 'brighten', label: 'Brighten iris', min: 0, max: 100, step: 1, default: 30 },
+  { tool: 'eyes', id: 'clarity', label: 'Iris clarity', min: 0, max: 100, step: 1, default: 35 },
   { tool: 'heal', id: 'radius', label: 'Brush size', min: 0.5, max: 6, step: 0.1, default: 2, unit: '%' },
   { tool: 'smooth', id: 'strength', label: 'Smoothing', min: 0, max: 100, step: 1, default: 35 },
-  { tool: 'smooth', id: 'keep', label: 'Keep fine detail', min: 0, max: 100, step: 1, default: 70 },
+  { tool: 'smooth', id: 'soften', label: 'Soften fine texture', min: 0, max: 100, step: 1, default: 30 }, // 100 - this = how much pore-level detail is kept
   { tool: 'light', id: 'exposure', label: 'Exposure', min: -2, max: 2, step: 0.05, default: 0, unit: 'EV' },
   { tool: 'light', id: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1, default: 0 },
   { tool: 'light', id: 'warmth', label: 'Warmth', min: -100, max: 100, step: 1, default: 0 },

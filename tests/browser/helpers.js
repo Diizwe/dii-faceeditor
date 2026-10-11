@@ -27,7 +27,7 @@ window.H.setFace = async (file) => { // loads, detects, picks the largest face a
 };
 window.H.smoothFrame = async (strength, keep) => {
   const t = window.__diiTest; t.store.setState({ history: { ops: [], ptr: 0, open: null } }); t.store.getState().setCompare(false);
-  if (strength !== null) t.store.getState().edit({ tool: 'smooth', params: { strength, keep, face: t.store.getState().activeFace } });
+  if (strength !== null) t.store.getState().edit({ tool: 'smooth', params: { strength, soften: 100 - keep, face: t.store.getState().activeFace } });
   await new Promise((r) => setTimeout(r, 250));
   return window.__dii.renderer.readOutHalf();
 };
@@ -75,4 +75,26 @@ window.H.withBlemish = async (file) => {
   const img = await t.loadImage(blob2, file + '#blemish'); t.store.getState().setImage(img);
   await window.H.waitFaces();
   return { spot: [cx, cy], R, fw: f.box[2], w: c.width, h: c.height, blemished: im };
+};
+
+// CIELAB (sRGB D65) and CIEDE2000 on 0..1 RGB triples
+window.H.lab = (r, g, b) => { const f = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4); const R = f(r), G = f(g), B = f(b);
+  const X = (0.4124564 * R + 0.3575761 * G + 0.1804375 * B) / 0.95047, Y = 0.2126729 * R + 0.7151522 * G + 0.072175 * B, Z = (0.0193339 * R + 0.119192 * G + 0.9503041 * B) / 1.08883;
+  const h = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116); return [116 * h(Y) - 16, 500 * (h(X) - h(Y)), 200 * (h(Y) - h(Z))]; };
+window.H.de2000 = (l1, l2) => { const rad = Math.PI / 180, deg = 180 / Math.PI; const [L1, a1, b1] = l1, [L2, a2, b2] = l2;
+  const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2), Cb = (C1 + C2) / 2, G = 0.5 * (1 - Math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7)));
+  const a1p = (1 + G) * a1, a2p = (1 + G) * a2, C1p = Math.hypot(a1p, b1), C2p = Math.hypot(a2p, b2);
+  const h1 = (Math.atan2(b1, a1p) * deg + 360) % 360, h2 = (Math.atan2(b2, a2p) * deg + 360) % 360;
+  const dL = L2 - L1, dC = C2p - C1p; let dh = h2 - h1; if (dh > 180) dh -= 360; else if (dh < -180) dh += 360; if (C1p * C2p === 0) dh = 0;
+  const dH = 2 * Math.sqrt(C1p * C2p) * Math.sin(dh * rad / 2), Lb = (L1 + L2) / 2, Cbp = (C1p + C2p) / 2;
+  let hb = Math.abs(h1 - h2) > 180 ? (h1 + h2 + 360) / 2 : (h1 + h2) / 2; if (C1p * C2p === 0) hb = h1 + h2;
+  const T = 1 - 0.17 * Math.cos((hb - 30) * rad) + 0.24 * Math.cos(2 * hb * rad) + 0.32 * Math.cos((3 * hb + 6) * rad) - 0.2 * Math.cos((4 * hb - 63) * rad);
+  const Sl = 1 + 0.015 * (Lb - 50) ** 2 / Math.sqrt(20 + (Lb - 50) ** 2), Sc = 1 + 0.045 * Cbp, Sh = 1 + 0.015 * Cbp * T;
+  const dth = 30 * Math.exp(-(((hb - 275) / 25) ** 2)), Rc = 2 * Math.sqrt(Cbp ** 7 / (Cbp ** 7 + 25 ** 7)), Rt = -Math.sin(2 * dth * rad) * Rc;
+  return Math.sqrt((dL / Sl) ** 2 + (dC / Sc) ** 2 + (dH / Sh) ** 2 + Rt * (dC / Sc) * (dH / Sh)); };
+window.H.toolFrame = async (tool, params) => {
+  const t = window.__diiTest; t.store.setState({ history: { ops: [], ptr: 0, open: null } }); t.store.getState().setCompare(false);
+  if (params) t.store.getState().edit({ tool, params: { ...params, face: t.store.getState().activeFace } });
+  await new Promise((r) => setTimeout(r, 250));
+  return window.__dii.renderer.readOutHalf();
 };

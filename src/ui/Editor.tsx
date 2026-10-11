@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useStore, geometryOf, lightOf, isLightIdentity, smoothOf } from '../store';
+import { useStore } from '../store';
+import { editFrom } from '../core/edit';
 import { LightPanel } from './LightPanel';
-import { SmoothPanel } from './SmoothPanel';
+import { RetouchPanel } from './RetouchPanel';
 import { HealPanel } from './HealPanel';
 import { PreviewHealer, healOps } from '../core/healer';
 import { active as activeOps } from '../core/history';
-import { rasterMask } from '../core/facemask';
+import { rasterMask, rasterTeeth, rasterIris } from '../core/facemask';
 import { skinStats } from '../core/skin';
 import { detectFaces } from '../core/faces';
 import { invert, apply } from '../core/geometry';
 import { Renderer, type View, type SmoothParams, type FaceMask } from '../gl/renderer';
-import { outToSource, outputSize, type Geometry } from '../core/geometry';
+import { outToSource, outputSize } from '../core/geometry';
 import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'heal' | 'crop' | 'smooth' | 'light' | 'faces' | 'export';
+type Panel = 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -40,34 +41,31 @@ export function Editor() {
   const [fail, setFail] = useState<string | null>(null);
 
   const split = useStore((s) => s.split);
-  const g: Geometry = geometryOf(history); // compare keeps the framing so before and after stay pixel-aligned
-  const light = lightOf(history);
-  const sm = smoothOf(history);
-  const maskCache = useRef<{ key: string; canvas: OffscreenCanvas | HTMLCanvasElement } | null>(null);
+  // everything the renderer needs, derived once per history/face change by the same function the export uses
+  const E = useMemo(() => editFrom(history, faces, activeFace), [history, faces, activeFace]);
+  const maskCache = useRef<{ key: string; canvas: OffscreenCanvas | HTMLCanvasElement; teeth: OffscreenCanvas | HTMLCanvasElement | null; iris: OffscreenCanvas | HTMLCanvasElement | null } | null>(null);
   const skinCache = useRef(new Map<number, { cb: number; cr: number; tol: number }>());
-  const showLight = !isLightIdentity(light);
   const k = image.previewScale;
   splitRef.current = split ? (splitRef.current >= 0 ? splitRef.current : size.w / 2) : -1;
-  // the picked face drives both Smooth and the skin protection in Light & colour
-  const maskFace = sm.strength > 0 || !isLightIdentity(light) ? (faces?.find((f) => f.id === (sm.strength > 0 ? (sm.face ?? activeFace) : activeFace)) ?? null) : null;
   const work = useMemo(() => {
+    const g = E.geometry;
     const [ow, oh] = outputSize(g, image.width, image.height);
     const w = Math.max(1, Math.round(ow * k)), h = Math.max(1, Math.round(oh * k));
     const m = outToSource(g, image.width, image.height, w / k, h / k);
     // source px -> preview px
     const mm = [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number];
     let face: FaceMask | null = null;
-    if (maskFace && maskFace.mesh.length >= 468) {
-      const inv = invert(mm), key = `${maskFace.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}`;
-      if (maskCache.current?.key !== key) maskCache.current = { key, canvas: rasterMask(maskFace.mesh as [number, number, number][], w, h, (x, y) => apply(inv, x, y)) };
-      let st = skinCache.current.get(maskFace.id);
-      if (!st) { st = skinStats(image.preview, maskFace.mesh as [number, number, number][], maskFace.box[2]); skinCache.current.set(maskFace.id, st); }
+    if (E.face) {
+      const mf = E.face, inv = invert(mm), key = `${mf.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}|${E.whiten ? 'w' : ''}${E.eyes ? 'e' : ''}`;
+      const map = (x: number, y: number) => apply(inv, x, y), mesh = mf.mesh as [number, number, number][];
+      if (maskCache.current?.key !== key) maskCache.current = { key, canvas: rasterMask(mesh, w, h, map), teeth: E.whiten ? rasterTeeth(mesh, w, h, map) : null, iris: E.eyes ? rasterIris(mesh, w, h, map) : null };
+      let st = skinCache.current.get(mf.id);
+      if (!st) { st = skinStats(image.preview, mf.mesh as [number, number, number][], mf.box[2]); skinCache.current.set(mf.id, st); }
       const scale = Math.sqrt(Math.abs(inv[0] * inv[4] - inv[1] * inv[3]));
-      face = { mask: maskCache.current.canvas, maskKey: key, fw: maskFace.box[2] * scale, skin: st };
+      face = { mask: maskCache.current.canvas, teeth: maskCache.current.teeth, iris: maskCache.current.iris, maskKey: key, fw: mf.box[2] * scale, skin: st };
     }
-    const smooth: SmoothParams | null = face && sm.strength > 0 ? { strength: sm.strength, keep: sm.keep } : null;
-    return { w, h, light: showLight ? light : null, smooth, face, m: mm };
-  }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation, maskFace, sm.strength, sm.keep]);
+    return { w, h, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, face, m: mm };
+  }, [E, image, k]);
 
   const [srcVersion, setSrcVersion] = useState(0);
   const healer = useRef<PreviewHealer | null>(null);
@@ -250,11 +248,13 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <SmoothPanel /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'heal'} onClick={() => setPanel('heal')} data-testid="tool-heal">Heal</button>
         <button aria-pressed={panel === 'crop'} onClick={() => setPanel('crop')} data-testid="tool-crop">Crop &amp; rotate</button>
+        <button aria-pressed={panel === 'whiten'} onClick={() => setPanel('whiten')} data-testid="tool-whiten">Whiten</button>
+        <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
         <button aria-pressed={panel === 'faces'} onClick={() => setPanel('faces')} data-testid="tool-faces">Faces</button>

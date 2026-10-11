@@ -108,7 +108,53 @@ void main(){
   vec3 lo = c, hi = c; ivec2 lim = textureSize(uOrig, 0) - 1;
   for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) { vec3 n = texelFetch(uOrig, clamp(p + ivec2(i, j), ivec2(0), lim), 0).rgb; lo = min(lo, n); hi = max(hi, n); }
   sm = clamp(sm, lo, hi);
-  o = vec4(clamp(mix(c, sm, w), 0.0, 1.0), 1.0);
+  // hue lock: smoothing may change brightness and colourfulness but only part of the hue (averaging across nearby colours would otherwise turn skin slightly redder or greener)
+  vec3 mixed = mix(c, sm, w);
+  float y0 = dot(c, vec3(0.2126, 0.7152, 0.0722)), y1 = dot(mixed, vec3(0.2126, 0.7152, 0.0722));
+  vec3 d0 = c - y0, d1 = mixed - y1;
+  float kk = length(d1) / max(length(d0), 1e-5);
+  vec3 room = mix(y1 / max(-d0, vec3(1e-6)), (1.0 - y1) / max(d0, vec3(1e-6)), step(0.0, d0));
+  vec3 locked = y1 + d0 * min(kk, min(room.r, min(room.g, room.b)));
+  o = vec4(clamp(mix(mixed, locked, 0.6 * clamp(m, 0.0, 1.0) * skin * step(0.0001, uP.x)), 0.0, 1.0), 1.0);
+}`;
+
+// Whiten: inside the feathered mouth mask, only bright, yellow-hued pixels move: chroma shrinks and luma lifts a little.
+const WHITEN = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform sampler2D uMask; uniform float uS;
+out vec4 o;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c = texelFetch(uTex, p, 0).rgb;
+  float m = texelFetch(uMask, p, 0).r;
+  if (m <= 0.0 || uS <= 0.0) { o = vec4(c, 1.0); return; }
+  float Y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), dd = mx - mn;
+  float hue = 0.0;
+  if (dd > 1e-4) hue = (mx == c.r ? mod((c.g - c.b) / dd, 6.0) : mx == c.g ? (c.b - c.r) / dd + 2.0 : (c.r - c.g) / dd + 4.0) * 60.0;
+  float yellow = smoothstep(20.0, 35.0, hue) * (1.0 - smoothstep(80.0, 95.0, hue)) * smoothstep(0.06, 0.14, dd / max(mx, 1e-4));
+  float bright = smoothstep(0.32, 0.5, Y);   // gums, lips and shadow inside the mouth are dark or red and stay untouched
+  float w = clamp(m, 0.0, 1.0) * yellow * bright * uS;
+  vec3 d = (c - Y) * (1.0 - 0.7 * w);
+  float Y2 = Y + 0.10 * w * (1.0 - Y);
+  o = vec4(clamp(Y2 + d, 0.0, 1.0), 1.0);
+}`;
+
+// Eyes: inside the feathered iris mask only (never sclera, lids or lashes): small luma lift and local contrast.
+const EYES = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform sampler2D uBlur; uniform sampler2D uMask; uniform vec2 uP; // brighten, clarity 0..1
+out vec4 o;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c = texelFetch(uTex, p, 0).rgb;
+  float m = clamp(texelFetch(uMask, p, 0).r, 0.0, 1.0);
+  if (m <= 0.0) { o = vec4(c, 1.0); return; }
+  vec3 b = texelFetch(uBlur, p, 0).rgb;
+  vec3 e = c + (c - b) * (2.0 * uP.y);
+  float Y = dot(e, vec3(0.2126, 0.7152, 0.0722));
+  e += uP.x * 0.16 * (1.0 - Y) * (0.4 + Y);
+  o = vec4(clamp(mix(c, e, m), 0.0, 1.0), 1.0);
 }`;
 
 const PRESENT = `#version 300 es
@@ -132,12 +178,13 @@ void main(){
 export interface View { zoom: number; panX: number; panY: number; }
 export interface LightParams { exposure: number; contrast: number; warmth: number; saturation: number; } // UI ranges: EV -2..2, others -100..100
 export interface FaceMask {
+  teeth?: HTMLCanvasElement | OffscreenCanvas | null; iris?: HTMLCanvasElement | OffscreenCanvas | null; // hard rasters sharing maskKey
   mask: HTMLCanvasElement | OffscreenCanvas; maskKey: string; // hard mask raster at work size; key changes when it changes
   fw: number; // face width in work px: all radii are multiples of this
   skin: { cb: number; cr: number; tol: number };
 }
 export interface SmoothParams { strength: number; keep: number } // 0..100
-export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; light?: LightParams | null; }
+export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -233,8 +280,8 @@ export class Renderer {
   }
 
   private extra: Target[] = [];
-  private maskKey = '';
-  private maskTex: Target | null = null;
+  private masks = new Map<string, { key: string; t: Target }>();
+  private get maskTex(): Target | null { return this.masks.get('face')?.t ?? null; }
   private progs = new Map<string, WebGLProgram>();
 
   private prog(name: string, frag: string): WebGLProgram {
@@ -282,7 +329,7 @@ export class Renderer {
   renderWork(plan: Plan) {
     const gl = this.gl, { w, h } = plan;
     if (!this.work || this.work.w !== w || this.work.h !== h) {
-      this.free(this.work); this.free(this.edited); this.free(this.maskTex); this.work = this.target(w, h, true, true); this.edited = null; this.maskTex = null; this.maskKey = '';
+      this.free(this.work); this.free(this.edited); this.clearMasks(); this.work = this.target(w, h, true, true); this.edited = null;
     }
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
@@ -293,14 +340,11 @@ export class Renderer {
     const flip = this.temp(3, w, h, true);
     const next = (): Target => (cur === this.edited ? flip : this.edited!);
     const face = plan.face ?? null;
-    if (face && (plan.smooth || plan.light)) {
-      if (this.maskKey !== face.maskKey || !this.maskTex) {
-        const feather = Math.max(2, 0.015 * face.fw);
-        const raw = this.uploadMask(face.mask, w, h);
-        this.free(this.maskTex); this.maskTex = this.target(w, h, true, false);
-        this.blur(raw, this.maskTex, this.temp(0, w, h), feather / 2, 0);
-        this.free(raw); this.maskKey = face.maskKey;
-      }
+    if (face && (plan.smooth || plan.light || plan.whiten || plan.eyes)) {
+      const feather = Math.max(2, 0.015 * face.fw) / 2;
+      this.ensureMask('face', face.mask, face.maskKey, feather, w, h);
+      if (plan.whiten && face.teeth) this.ensureMask('teeth', face.teeth, face.maskKey, feather, w, h);
+      if (plan.eyes && face.iris) this.ensureMask('iris', face.iris, face.maskKey, feather * 0.6, w, h);
     }
     if (plan.smooth && face && this.maskTex) {
       const sp = plan.smooth;
@@ -313,6 +357,17 @@ export class Renderer {
         { uP: [s, sp.keep / 100, face.skin.cb, face.skin.cr], uTol: face.skin.tol });
       cur = dst;
     }
+    if (plan.whiten && face && this.masks.get('teeth')) {
+      const dst = next();
+      this.pass('whiten', WHITEN, dst, { uTex: cur.tex, uMask: this.masks.get('teeth')!.t.tex }, { uS: plan.whiten.strength / 100 });
+      cur = dst;
+    }
+    if (plan.eyes && face && this.masks.get('iris')) {
+      const t1 = this.temp(0, w, h), t3 = this.temp(2, w, h), dst = next();
+      this.blur(cur, t3, t1, Math.max(1, 0.012 * face.fw), 0);
+      this.pass('eyes', EYES, dst, { uTex: cur.tex, uBlur: t3.tex, uMask: this.masks.get('iris')!.t.tex }, { uP: [plan.eyes.brighten / 100, plan.eyes.clarity / 100] });
+      cur = dst;
+    }
     if (plan.light) {
       const L = plan.light, dst = next();
       const useMask = face && this.maskTex ? 1 : 0;
@@ -323,9 +378,21 @@ export class Renderer {
     this.out = cur;
   }
 
-  /** The feathered mask of the last smooth pass (tests). */
-  readMask(): { w: number; h: number; data: Float32Array } | null {
-    const gl = this.gl, t = this.maskTex; if (!t) return null;
+  private clearMasks() { for (const m of this.masks.values()) this.free(m.t); this.masks.clear(); }
+
+  /** Upload a hard raster and blur it into a feathered, zero-beyond-support mask (cached by key). */
+  private ensureMask(name: string, canvas: HTMLCanvasElement | OffscreenCanvas, key: string, sigma: number, w: number, h: number) {
+    const have = this.masks.get(name);
+    if (have && have.key === key) return;
+    if (have) this.free(have.t);
+    const raw = this.uploadMask(canvas, w, h), t = this.target(w, h, true, false);
+    this.blur(raw, t, this.temp(0, w, h), sigma, 0);
+    this.free(raw); this.masks.set(name, { key, t });
+  }
+
+  /** The feathered mask by name (tests). */
+  readMask(name = 'face'): { w: number; h: number; data: Float32Array } | null {
+    const gl = this.gl, t = this.masks.get(name)?.t; if (!t) return null;
     const px = new Float32Array(t.w * t.h * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo); gl.readPixels(0, 0, t.w, t.h, gl.RGBA, gl.FLOAT, px);
     return { w: t.w, h: t.h, data: px };
   }
@@ -382,7 +449,7 @@ export class Renderer {
     const gl = this.gl;
     const prev = this.src, prevOut = this.out;
     this.src = this.uploadTexture(bmp);
-    this.maskKey = ''; // masks are per region
+    this.clearMasks(); // masks are per region
     this.renderWork(plan);
     const t = this.out!;
     const f = new Float32Array(inner.w * inner.h * 4);
@@ -407,5 +474,5 @@ export class Renderer {
   /** Read the presented canvas (tests). */
   readCanvas(w: number, h: number): Uint8Array { const o = new Uint8Array(w * h * 4); this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); this.gl.readPixels(0, 0, w, h, this.gl.RGBA, this.gl.UNSIGNED_BYTE, o); return o; }
 
-  dispose() { this.free(this.work); this.free(this.edited); this.free(this.maskTex); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
+  dispose() { this.free(this.work); this.free(this.edited); this.clearMasks(); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
 }

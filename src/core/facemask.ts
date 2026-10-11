@@ -38,3 +38,36 @@ export function rasterMask(mesh: Pt[], w: number, h: number, map: (x: number, y:
   g.fillStyle = '#000'; for (const hole of R.holes) { g.beginPath(); path(hole); g.fill(); }
   return c;
 }
+
+// ---- teeth and iris regions -----------------------------------------------------------------------------------------
+export const IRIS_R = 468; // right-eye iris centre in the 478-point mesh; 469-472 are its rim
+export const IRIS_L = 473; // left-eye iris centre; 474-477 are its rim
+
+const canvasOf = (w: number, h: number): HTMLCanvasElement | OffscreenCanvas =>
+  typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+
+/** Inner-lip polygon (the mouth opening). The Whiten shader then keeps only bright, yellow-ish pixels inside it. */
+export function rasterTeeth(mesh: Pt[], w: number, h: number, map: (x: number, y: number) => [number, number]) {
+  const c = canvasOf(w, h), g = c.getContext('2d') as CanvasRenderingContext2D;
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#fff'; g.beginPath();
+  poly(mesh, LIPS_INNER).forEach((p, i) => { const [x, y] = map(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.closePath(); g.fill();
+  return c;
+}
+
+/** Iris discs clipped to the eye outline, so lids, lashes and sclera are never in the mask. Null if the mesh has no iris points. */
+export function rasterIris(mesh: Pt[], w: number, h: number, map: (x: number, y: number) => [number, number]) {
+  if (mesh.length < 478) return null;
+  const c = canvasOf(w, h), g = c.getContext('2d') as CanvasRenderingContext2D;
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  for (const [centre, rim, eye] of [[IRIS_R, [469, 470, 471, 472], EYE_R], [IRIS_L, [474, 475, 476, 477], EYE_L]] as const) {
+    const [cx, cy] = map(mesh[centre][0], mesh[centre][1]);
+    const rad = rim.reduce((a, i) => { const [x, y] = map(mesh[i][0], mesh[i][1]); return a + Math.hypot(x - cx, y - cy); }, 0) / rim.length;
+    g.save(); g.beginPath();
+    poly(mesh, [...eye]).forEach((p, i) => { const [x, y] = map(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.closePath(); g.clip();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, rad * 0.96, 0, Math.PI * 2); g.fill(); g.restore();
+  }
+  return c;
+}

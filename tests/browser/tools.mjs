@@ -180,9 +180,9 @@ if (!only || only === 'smooth') {
 if (!only || only === 'parity') {
   const files = (process.env.PARITY_FILES || 'photos/p05.jpg,photos/p21.jpg,photos/p28.jpg').split(',');
   const cases = {
-    smooth: [{ tool: 'smooth', params: { strength: 60, keep: 70, face: null } }],
+    smooth: [{ tool: 'smooth', params: { strength: 60, soften: 30, face: null } }],
     light: [{ tool: 'light', params: { exposure: 0.4, contrast: 25, warmth: 30, saturation: 20 } }],
-    combo: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 6, aspect: 0.8 } }, { tool: 'smooth', params: { strength: 40, keep: 70, face: null } }, { tool: 'light', params: { exposure: -0.2, contrast: 10, warmth: -20, saturation: 10 } }],
+    combo: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 6, aspect: 0.8 } }, { tool: 'smooth', params: { strength: 40, soften: 30, face: null } }, { tool: 'light', params: { exposure: -0.2, contrast: 10, warmth: -20, saturation: 10 } }],
   };
   const M = T.metrics;
   for (const [name, ops] of Object.entries(cases)) {
@@ -244,6 +244,118 @@ if (!only || only === 'heal') {
     check(`M_deterministic_diff_levels heal MST ${g}`, mx('det'), mx('det') <= M.M_deterministic_diff_levels.max);
     check(`heal_removes_blemish (residual error / original error) MST ${g}`, mx('residual'), mx('residual') <= 0.5);
   }
+}
+
+if (!only || only === 'whiten') {
+  const M = T.metrics, rowsAll = {}, skipped = [];
+  for (const p of manifest) {
+    const r = await page.evaluate(async (file) => {
+      const f = await window.H.setFace(file); if (!f) return { skip: 'no face' };
+      const base = await window.H.toolFrame(null, null);
+      const def = await window.H.toolFrame('whiten', { strength: 40 }); const mk = window.__dii.renderer.readMask('teeth');
+      if (!mk) return { skip: 'no teeth mask' };
+      const mx = await window.H.toolFrame('whiten', { strength: 100 });
+      const N = base.w * base.h, sel = [];
+      for (let i = 0; i < N; i++) if (mk.data[i * 4] >= 0.9) { const y = 0.2126 * base.data[i * 4] + 0.7152 * base.data[i * 4 + 1] + 0.0722 * base.data[i * 4 + 2]; if (y > 0.55) sel.push(i); }
+      if (sel.length < 60) return { skip: 'teeth not visible (' + sel.length + ' px)' };
+      const meanLab = (fr) => { let L = 0, a = 0, b = 0; for (const i of sel) { const l = window.H.lab(fr.data[i * 4], fr.data[i * 4 + 1], fr.data[i * 4 + 2]); L += l[0]; a += l[1]; b += l[2]; } return [L / sel.length, a / sel.length, b / sel.length]; };
+      const lb = meanLab(base), ld = meanLab(def), lm = meanLab(mx);
+      let outside = 0, clip = 0; for (let i = 0; i < N; i++) { const inMask = mk.data[i * 4] > 0; for (let c = 0; c < 3; c++) { const d = Math.abs(def.data[i * 4 + c] - base.data[i * 4 + c]) * 255; if (!inMask && d > 1) { outside++; break; } if ((def.data[i * 4 + c] >= 1 && base.data[i * 4 + c] < 1) || (def.data[i * 4 + c] <= 0 && base.data[i * 4 + c] > 0)) clip++; } }
+      return { n: sel.length, Lmax: lm[0], bmax: lm[2], bBase: lb[2], yellowDrop: lb[2] > 6 ? (lb[2] - ld[2]) / lb[2] : null, outside, clip: clip / (N * 3) };
+    }, p.file);
+    if (r.skip) { skipped.push(`${p.id}: ${r.skip}`); continue; }
+    (rowsAll[groupOf[p.id]] ??= []).push({ id: p.id, ...r }); if (process.env.DBG) console.log(p.id, JSON.stringify(r));
+  }
+  console.log('whiten skipped', skipped.length, 'of', manifest.length);
+  for (const g of ['9-10', '7-8', '5-6', '3-4', '1-2']) {
+    const rows = rowsAll[g] ?? []; if (!rows.length) { check(`whiten evidence MST ${g}`, 'no photo with visible teeth', false); continue; }
+    const mx = (k) => Math.max(...rows.map((x) => x[k])), mn = (k) => Math.min(...rows.map((x) => x[k]));
+    check(`M_whiten_teeth_L_max MST ${g}`, mx('Lmax'), mx('Lmax') <= M.M_whiten_teeth_L_max.max, { n: rows.length });
+    check(`M_whiten_teeth_b_min MST ${g}`, mn('bmax'), mn('bmax') >= M.M_whiten_teeth_b_min.min);
+    const yd = rows.filter((x) => x.yellowDrop !== null).map((x) => x.yellowDrop);
+    if (yd.length) { const m = yd.reduce((a, b) => a + b) / yd.length; check(`M_whiten_yellow_reduction_default MST ${g}`, m, m >= M.M_whiten_yellow_reduction_default.min, { n: yd.length }); }
+    check(`M_outside_mask_changed_px whiten MST ${g}`, mx('outside'), mx('outside') <= 0);
+    check(`M_clipped_px_increase whiten MST ${g}`, mx('clip'), mx('clip') <= M.M_clipped_px_increase.max);
+  }
+}
+
+if (!only || only === 'eyes') {
+  const M = T.metrics, rowsAll = {}, skipped = [];
+  for (const p of manifest) {
+    const r = await page.evaluate(async (file) => {
+      const f = await window.H.setFace(file); if (!f) return { skip: 'no face' };
+      if (f.mesh.length < 478) return { skip: 'mesh has ' + f.mesh.length + ' points (no iris)' };
+      const base = await window.H.toolFrame(null, null);
+      const def = await window.H.toolFrame('eyes', { brighten: 30, clarity: 35 }); const im = window.__dii.renderer.readMask('iris'); if (!im) return { skip: 'no iris mask' };
+      const cl = await window.H.toolFrame('eyes', { brighten: 0, clarity: 100 });
+      const w = base.w, h = base.h, N = w * h;
+      // eye outline raster (sclera = outline minus iris disc, never edited)
+      const c = new OffscreenCanvas(w, h), g = c.getContext('2d', { willReadFrequently: true }); g.fillStyle = '#000'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff';
+      for (const eye of [[362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398], [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]]) { g.beginPath(); eye.forEach((i, k) => (k ? g.lineTo(f.mesh[i][0], f.mesh[i][1]) : g.moveTo(f.mesh[i][0], f.mesh[i][1]))); g.closePath(); g.fill(); }
+      const eyeD = g.getImageData(0, 0, w, h).data;
+      const irisHard = new Uint8Array(N); for (let i = 0; i < N; i++) irisHard[i] = im.data[i * 4] > 0.001 ? 1 : 0;
+      const sclera = []; for (let i = 0; i < N; i++) if (eyeD[i * 4] > 200 && !irisHard[i]) sclera.push(i);
+      // sclera pixels farther than the feather width from the iris: leakage test (feather may legitimately touch the rim)
+      let de = 0, dn = 0; for (const i of sclera) { de += window.H.de2000(window.H.lab(base.data[i * 4], base.data[i * 4 + 1], base.data[i * 4 + 2]), window.H.lab(def.data[i * 4], def.data[i * 4 + 1], def.data[i * 4 + 2])); dn++; }
+      const iris = new Uint8Array(N); for (let i = 0; i < N; i++) iris[i] = im.data[i * 4] >= 0.99 ? 1 : 0;
+      const yb = window.H.luma(base), yc = window.H.luma(cl);
+      const vb = window.H.lapVar(yb, w, h, iris), vc = window.H.lapVar(yc, w, h, iris);
+      let outside = 0, clip = 0; for (let i = 0; i < N; i++) for (let c2 = 0; c2 < 3; c2++) { const d = Math.abs(def.data[i * 4 + c2] - base.data[i * 4 + c2]) * 255; if (im.data[i * 4] === 0 && d > 1) { outside++; break; } if ((def.data[i * 4 + c2] >= 1 && base.data[i * 4 + c2] < 1) || (def.data[i * 4 + c2] <= 0 && base.data[i * 4 + c2] > 0)) clip++; }
+      return { irisPx: iris.reduce((a, b) => a + b, 0), sclera: dn ? de / dn : 0, gain: vb > 0 ? vc / vb - 1 : 0, outside, clip: clip / (N * 3) };
+    }, p.file);
+    if (r.skip) { skipped.push(`${p.id}: ${r.skip}`); continue; }
+    if (r.irisPx < 20) { skipped.push(`${p.id}: iris not visible (${r.irisPx} px)`); continue; }
+    (rowsAll[groupOf[p.id]] ??= []).push({ id: p.id, ...r }); if (process.env.DBG) console.log(p.id, JSON.stringify(r));
+  }
+  console.log('eyes skipped', skipped.length, 'of', manifest.length, process.env.DBG ? skipped.join('; ') : '');
+  for (const g of ['9-10', '7-8', '5-6', '3-4', '1-2']) {
+    const rows = rowsAll[g] ?? []; if (!rows.length) { check(`eyes evidence MST ${g}`, 'no photo with a visible iris', false); continue; }
+    const mx = (k) => Math.max(...rows.map((x) => x[k])), mean = (k) => rows.reduce((a, x) => a + x[k], 0) / rows.length;
+    check(`M_eyes_sclera_shift_deltaE MST ${g}`, mean('sclera'), mean('sclera') <= M.M_eyes_sclera_shift_deltaE.max, { n: rows.length, worst: mx('sclera') });
+    check(`M_eyes_iris_sharpness_gain_max MST ${g}`, mean('gain'), mean('gain') >= M.M_eyes_iris_sharpness_gain_max.min);
+    check(`M_outside_mask_changed_px eyes MST ${g}`, mx('outside'), mx('outside') <= 0);
+    check(`M_clipped_px_increase eyes MST ${g}`, mx('clip'), mx('clip') <= M.M_clipped_px_increase.max);
+  }
+}
+
+if (!only || only === 'compare') {
+  const M = T.metrics;
+  const r = await page.evaluate(async () => {
+    const t = window.__diiTest; const f = await window.H.setFace('photos/p05.jpg');
+    // no edits: compare frame == original pixels
+    t.store.setState({ history: { ops: [], ptr: 0, open: null } }); t.store.getState().setCompare(false);
+    await new Promise((r) => setTimeout(r, 300));
+    const orig = window.__dii.renderer.readOutHalf();
+    // heavy edit stack
+    t.store.getState().edit({ tool: 'smooth', params: { strength: 80, soften: 30, face: f.id } });
+    t.store.getState().edit({ tool: 'light', params: { exposure: 0.5, contrast: 30, warmth: 20, saturation: 20 } });
+    t.store.getState().edit({ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 4, aspect: 0.8 } });
+    await new Promise((r) => setTimeout(r, 1500));
+    const after = window.__dii.renderer.readOutHalf();
+    // toggle latency: time from setCompare to the next present, measured with a forced readback
+    const lat = [];
+    for (let i = 0; i < 6; i++) {
+      const before = window.__dii.renders; const t0 = performance.now();
+      t.store.getState().setCompare(i % 2 === 0);
+      while (window.__dii.renders === before) await new Promise((r) => setTimeout(r, 0));
+      const gl = window.__dii.renderer.gl; gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+      lat.push(performance.now() - t0);
+    }
+    // compare view with edits must equal the geometry-only frame of the same edits (aligned, 0 levels)
+    t.store.getState().setCompare(true); await new Promise((r) => setTimeout(r, 100));
+    window.__dii.redraw();
+    const gl = window.__dii.renderer.gl, c = window.__dii.renderer.canvas, px = new Uint8Array(c.width * c.height * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, c.width, c.height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    // reference: same geometry, no other edits
+    t.store.setState({ history: { ops: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 4, aspect: 0.8 } }], ptr: 1, open: null } }); t.store.getState().setCompare(true);
+    await new Promise((r) => setTimeout(r, 400)); window.__dii.redraw();
+    const px2 = new Uint8Array(c.width * c.height * 4); gl.readPixels(0, 0, c.width, c.height, gl.RGBA, gl.UNSIGNED_BYTE, px2);
+    let diff = 0; for (let i = 0; i < px.length; i++) diff = Math.max(diff, Math.abs(px[i] - px2[i]));
+    let changed = 0; for (let i = 0; i < after.data.length; i += 4 * 13) changed += Math.abs(after.data[i] - orig.data[i % orig.data.length]);
+    return { lat, diff, edited: after.w !== orig.w || changed > 0 };
+  });
+  const maxLat = Math.max(...r.lat);
+  check('M_compare_identity_levels (compare view == geometry-only frame)', r.diff, r.diff <= M.M_compare_identity_levels.max);
+  check('compare_toggle_latency_ms (limit 100)', maxLat, maxLat <= 100, { all: r.lat.map((v) => Math.round(v)) });
 }
 
 check('no_page_errors', errs.slice(0, 3), errs.length === 0);
