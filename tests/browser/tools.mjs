@@ -49,6 +49,7 @@ window.H = {
   },
 };` });
 
+await page.addScriptTag({ path: path.join(here, 'helpers.js') });
 const light0 = { exposure: 0, contrast: 0, warmth: 0, saturation: 0 };
 
 if (!only || only === 'light') {
@@ -116,6 +117,68 @@ if (!only || only === 'light') {
     (hue[groupOf[p.id]] ??= []).push(r);
   }
   for (const [g, v] of Object.entries(hue)) { const mx = Math.max(...v); check(`M_skin_hue_shift_deg light MST ${g}`, mx, mx <= T.metrics.M_skin_hue_shift_deg.max, { n: v.length }); }
+}
+
+
+if (!only || only === 'smooth') {
+  const groupRes = {};
+  for (const p of manifest) {
+    const r = await page.evaluate(async (file) => {
+      const f = await window.H.setFace(file); if (!f) return { miss: true };
+      const base = await window.H.smoothFrame(null, 70);
+      const def = await window.H.smoothFrame(35, 70); const mask = window.__dii.renderer.readMask();
+      const mx = await window.H.smoothFrame(100, 70);
+      const w = base.w, h = base.h, N = w * h, m = new Float32Array(N); for (let i = 0; i < N; i++) m[i] = mask.data[i * 4];
+      // outside mask: weight 0
+      let outside = 0, ringSum = 0, ringN = 0, over = 0, overN = 0;
+      const zero = new Uint8Array(N); for (let i = 0; i < N; i++) zero[i] = m[i] === 0 ? 1 : 0;
+      const d3 = window.H.erode(zero, w, h, 3); // pixels whose 7x7 neighbourhood is all zero-weight
+      const nearZero = new Uint8Array(N); // non-zero pixels within 3 px of a zero pixel
+      const dil = new Uint8Array(N); { const inv = new Uint8Array(N); for (let i = 0; i < N; i++) inv[i] = zero[i] ? 0 : 1; const e = window.H.erode(inv, w, h, 3); for (let i = 0; i < N; i++) dil[i] = (!zero[i] && !e[i]) ? 1 : 0; }
+      const mn5 = (arr, p, c) => { let lo = 9, hi = -9; const x = p % w, y = (p / w) | 0; for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) { const xx = Math.min(w - 1, Math.max(0, x + i)), yy = Math.min(h - 1, Math.max(0, y + j)); const v = arr[(yy * w + xx) * 4 + c]; if (v < lo) lo = v; if (v > hi) hi = v; } return [lo, hi]; };
+      for (let i = 0; i < N; i++) {
+        let dmax = 0; for (let c = 0; c < 3; c++) dmax = Math.max(dmax, Math.abs(def.data[i * 4 + c] - base.data[i * 4 + c]) * 255);
+        if (zero[i] && dmax > 1) outside++;
+        if (dil[i]) { ringSum += dmax; ringN++; }
+        if (m[i] > 0 && m[i] < 1 && (i % 3 === 0)) { overN++; for (let c = 0; c < 3; c++) { const [lo, hi] = mn5(base.data, i, c); const v = def.data[i * 4 + c]; const ex = Math.max(lo - v, v - hi) * 255; if (ex > over) over = ex; } }
+      }
+      // skin region: mask >= 0.99, eroded by 4 px
+      const inside = new Uint8Array(N); for (let i = 0; i < N; i++) inside[i] = m[i] >= 0.99 ? 1 : 0; const skin = window.H.erode(inside, w, h, 4);
+      const yb = window.H.luma(base), yd = window.H.luma(def), ym = window.H.luma(mx);
+      const vb = window.H.lapVar(yb, w, h, skin), vd = window.H.lapVar(yd, w, h, skin), vm = window.H.lapVar(ym, w, h, skin);
+      const sc = f.box[2] / 600; const bp = (y) => { const a = window.H.gauss(y, w, h, 2 * sc), b = window.H.gauss(y, w, h, 6 * sc); let e = 0, n = 0; for (let i = 0; i < N; i++) if (skin[i]) { const d = a[i] - b[i]; e += d * d; n++; } return e / n; };
+      const eb = bp(yb), em = bp(ym);
+      const hueMean = (fr) => { let sx = 0, sy = 0; for (let i = 0; i < N; i += 3) if (skin[i]) { const hh = window.H.hue(fr.data[i * 4], fr.data[i * 4 + 1], fr.data[i * 4 + 2]) * Math.PI / 180; sx += Math.cos(hh); sy += Math.sin(hh); } return Math.atan2(sy, sx) * 180 / Math.PI; };
+      let dh = hueMean(def) - hueMean(base); dh = ((dh + 540) % 360) - 180;
+      let clip = 0; for (let i = 0; i < N * 4; i += 4) for (let c = 0; c < 3; c++) { const o = base.data[i + c], v = def.data[i + c]; if ((v <= 0 && o > 0) || (v >= 1 && o < 1)) clip++; }
+      return { skinPx: skin.reduce((a, v) => a + v, 0), outside, ring: ringN ? ringSum / ringN : 0, over, ret_def: vd / vb, ret_max: vm / vb, blem: 1 - em / eb, hue: Math.abs(dh), clip: clip / (N * 3) };
+    }, p.file);
+    if (r.miss) { console.log('no face', p.id); continue; }
+    (groupRes[groupOf[p.id]] ??= []).push({ id: p.id, ...r });
+    if (process.env.DBG) console.log(p.id, JSON.stringify(r));
+  }
+  const M = T.metrics;
+  const mean = (v) => v.reduce((a, b) => a + b, 0) / v.length, mx = (v) => Math.max(...v), mn = (v) => Math.min(...v);
+  const spec = [
+    ['M_outside_mask_changed_px', 'outside', mx, (v) => v <= M.M_outside_mask_changed_px.max],
+    ['M_halo_ring_mean_abs_levels', 'ring', mean, (v) => v <= M.M_halo_ring_mean_abs_levels.max],
+    ['M_halo_overshoot_levels', 'over', mx, (v) => v <= M.M_halo_overshoot_levels.max],
+    ['M_detail_retention_default', 'ret_def', mean, (v) => v >= M.M_detail_retention_default.min],
+    ['M_detail_retention_max', 'ret_max', mean, (v) => v >= M.M_detail_retention_max.min],
+    ['M_blemish_energy_reduction_max', 'blem', mean, (v) => v >= M.M_blemish_energy_reduction_max.min],
+    ['M_skin_hue_shift_deg (smooth)', 'hue', mx, (v) => v <= M.M_skin_hue_shift_deg.max],
+    ['M_clipped_px_increase (smooth)', 'clip', mx, (v) => v <= M.M_clipped_px_increase.max],
+  ];
+  for (const [name, key, fn, ok] of spec) {
+    const vals = {};
+    for (const [g, arr] of Object.entries(groupRes)) { vals[g] = fn(arr.map((x) => x[key])); check(`${name} MST ${g}`, vals[g], ok(vals[g]), { n: arr.length }); }
+  }
+  // cross-group parity for ratio/level metrics (group mean vs all-group median)
+  for (const [name, key, , ] of spec.filter((x) => ['ret_def', 'ret_max', 'blem', 'ring'].includes(x[1]))) {
+    const gm = Object.entries(groupRes).map(([g, arr]) => [g, mean(arr.map((x) => x[key]))]); const sorted = gm.map((x) => x[1]).sort((a, b) => a - b); const med = sorted[Math.floor(sorted.length / 2)];
+    const worst = gm.reduce((w, [g, v]) => (Math.abs(v - med) / Math.abs(med) > w[1] ? [g, Math.abs(v - med) / Math.abs(med)] : w), ['', 0]);
+    check(`parity ${name}`, worst[1], worst[1] <= T.evaluation.parity_relative_max, { worst_group: worst[0], median: med });
+  }
 }
 
 check('no_page_errors', errs.slice(0, 3), errs.length === 0);

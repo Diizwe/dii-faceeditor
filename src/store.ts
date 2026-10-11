@@ -49,5 +49,7 @@ export const geometryOf = (h: History): Geometry => (latest(h, 'geometry')?.para
 import type { LightParams } from './gl/renderer';
 import { defaultsOf } from './core/settings';
 export const lightOf = (h: History): LightParams => ({ ...(defaultsOf('light') as unknown as LightParams), ...((latest(h, 'light')?.params as Partial<LightParams> | undefined) ?? {}) });
+export interface SmoothOp { strength: number; keep: number; face: number | null }
+export const smoothOf = (h: History): SmoothOp => ({ ...(defaultsOf('smooth') as unknown as SmoothOp), strength: 0, face: null, ...((latest(h, 'smooth')?.params as Partial<SmoothOp> | undefined) ?? {}) });
 export const isLightIdentity = (l: LightParams) => l.exposure === 0 && l.contrast === 0 && l.warmth === 0 && l.saturation === 0;
 export const activeOps = (h: History) => active(h);

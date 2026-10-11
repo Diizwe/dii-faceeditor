@@ -26,7 +26,14 @@ void main(){
   vec3 c = texelFetch(uTex, ivec2(gl_FragCoord.xy), 0).rgb;
   vec3 l = toLin(c);
   l *= exp2(uA.x);
-  vec3 g = vec3(exp(0.18*uA.z), 1.0, exp(-0.18*uA.z));
+  // warmth protects skin tones: pixels with a skin-like hue and saturation take only 30% of the shift, so faces stay natural while the scene warms
+  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), dd = mx - mn;
+  float hue = 0.0;
+  if (dd > 1e-4) { hue = (mx == c.r ? mod((c.g - c.b) / dd, 6.0) : mx == c.g ? (c.b - c.r) / dd + 2.0 : (c.r - c.g) / dd + 4.0) * 60.0; if (hue > 180.0) hue -= 360.0; }
+  float sat = dd / max(mx, 1e-4);
+  float skin = smoothstep(-35.0, -5.0, hue) * (1.0 - smoothstep(50.0, 75.0, hue)) * smoothstep(0.08, 0.2, sat) * (1.0 - smoothstep(0.7, 0.9, sat));
+  float wm = uA.z * (1.0 - 0.7 * skin);
+  vec3 g = vec3(exp(0.18*wm), 1.0, exp(-0.18*wm));
   g /= dot(g, vec3(0.2126, 0.7152, 0.0722));   // keep luminance, move white balance only
   l *= g;
   vec3 e = toEnc(clamp(l, 0.0, 1.0));
@@ -42,6 +49,49 @@ void main(){
   vec3 s = e*e*(3.0-2.0*e);
   e = uA.y >= 0.0 ? mix(e, s, uA.y) : 0.5 + (e - 0.5) * (1.0 + uA.y);
   o = vec4(clamp(e, 0.0, 1.0), 1.0);
+}`;
+
+
+// Separable blur: plain Gaussian when uRange = 0, edge-aware (bilateral) otherwise. Taps beyond the radius are never read,
+// so a mask blurred with it is exactly zero beyond its support.
+const BLUR = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uStep; uniform float uSigmaS; uniform float uRange; uniform int uRadius;
+out vec4 o;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c0 = texelFetch(uTex, p, 0).rgb;
+  vec3 acc = vec3(0.0); float wsum = 0.0;
+  ivec2 lim = textureSize(uTex, 0) - 1;
+  for (int i = -64; i <= 64; i++) {
+    if (i < -uRadius || i > uRadius) continue;
+    ivec2 q = clamp(p + ivec2(vec2(i) * uStep), ivec2(0), lim);
+    vec3 c = texelFetch(uTex, q, 0).rgb;
+    float w = exp(-float(i*i) / (2.0 * uSigmaS * uSigmaS));
+    if (uRange > 0.0) { vec3 d = c - c0; w *= exp(-dot(d, d) / (2.0 * uRange * uRange)); }
+    acc += c * w; wsum += w;
+  }
+  o = vec4(acc / wsum, 1.0);
+}`;
+
+// Smooth composite: blend (smoothed base + kept fine detail) into the original, weighted by feathered face mask x skin colour.
+const SMOOTH = `#version 300 es
+precision highp float;
+uniform sampler2D uOrig; uniform sampler2D uBase; uniform sampler2D uFine; uniform sampler2D uMask;
+uniform vec4 uP; // strength 0..1, detail keep 0..1, skin cb, skin cr
+uniform float uTol;
+out vec4 o;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c = texelFetch(uOrig, p, 0).rgb;
+  float m = texelFetch(uMask, p, 0).r;
+  if (m <= 0.0) { o = vec4(c, 1.0); return; }
+  float cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b, cr = 0.5*c.r - 0.418688*c.g - 0.081312*c.b;
+  float d = length(vec2(cb - uP.z, cr - uP.w)) / uTol;
+  float skin = 1.0 - smoothstep(1.0, 2.2, d);
+  float w = clamp(m, 0.0, 1.0) * skin * uP.x;
+  vec3 sm = texelFetch(uBase, p, 0).rgb + (c - texelFetch(uFine, p, 0).rgb) * uP.y;
+  o = vec4(clamp(mix(c, sm, w), 0.0, 1.0), 1.0);
 }`;
 
 const PRESENT = `#version 300 es
@@ -64,7 +114,13 @@ void main(){
 
 export interface View { zoom: number; panX: number; panY: number; }
 export interface LightParams { exposure: number; contrast: number; warmth: number; saturation: number; } // UI ranges: EV -2..2, others -100..100
-export interface Plan { m: Affine; w: number; h: number; light?: LightParams | null; }
+export interface SmoothParams {
+  strength: number; keep: number; // 0..100
+  mask: HTMLCanvasElement | OffscreenCanvas; maskKey: string; // hard mask raster at work size; key changes when it changes
+  fw: number; // face width in work px: all radii are multiples of this
+  skin: { cb: number; cr: number; tol: number };
+}
+export interface Plan { m: Affine; w: number; h: number; smooth?: SmoothParams | null; light?: LightParams | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -73,7 +129,7 @@ interface Target { tex: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: numbe
 export class Renderer {
   gl: WebGL2RenderingContext;
   readonly maxTex: number;
-  private progGeom: WebGLProgram; private progPresent: WebGLProgram; private progLight: WebGLProgram;
+  private progGeom: WebGLProgram; private progPresent: WebGLProgram;
   private src: { tex: WebGLTexture; w: number; h: number } | null = null;
   private work: Target | null = null; // geometry result = the unedited frame ("before")
   private edited: Target | null = null; // after retouch/colour passes
@@ -92,7 +148,6 @@ export class Renderer {
     this.maxTex = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE) as number, opts.maxTextureSize ?? 4096);
     this.progGeom = this.program(VERT, GEOM);
     this.progPresent = this.program(VERT, PRESENT);
-    this.progLight = this.program(VERT, LIGHT);
     this.vao = gl.createVertexArray()!;
   }
 
@@ -160,30 +215,98 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  /** Run the edit pipeline for the preview. Geometry gives the unedited frame; later passes ping-pong into `edited`. */
+  private extra: Target[] = [];
+  private maskKey = '';
+  private maskTex: Target | null = null;
+  private progs = new Map<string, WebGLProgram>();
+
+  private prog(name: string, frag: string): WebGLProgram {
+    let p = this.progs.get(name); if (!p) { p = this.program(VERT, frag); this.progs.set(name, p); } return p;
+  }
+
+  /** Generic full-screen pass: textures bound to units 0..n by uniform name, scalar/vector uniforms by name. */
+  private pass(name: string, frag: string, dst: Target, tex: Record<string, WebGLTexture>, uni: Record<string, number | number[]>) {
+    const gl = this.gl, pr = this.prog(name, frag);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo); gl.viewport(0, 0, dst.w, dst.h);
+    gl.useProgram(pr); gl.bindVertexArray(this.vao);
+    let unit = 0;
+    for (const [n, t] of Object.entries(tex)) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.uniform1i(gl.getUniformLocation(pr, n), unit++); }
+    for (const [n, v] of Object.entries(uni)) {
+      const loc = gl.getUniformLocation(pr, n); if (!loc) continue;
+      if (typeof v === 'number') (n === 'uRadius' ? gl.uniform1i(loc, v) : gl.uniform1f(loc, v));
+      else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]); else if (v.length === 4) gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private temp(i: number, w: number, h: number, mips = false): Target {
+    const t = this.extra[i];
+    if (t && t.w === w && t.h === h) return t;
+    this.free(t); return (this.extra[i] = this.target(w, h, true, mips));
+  }
+
+  private blur(src: Target, dst: Target, mid: Target, sigma: number, range: number) {
+    const radius = Math.min(64, Math.ceil(sigma * 3));
+    const u = { uSigmaS: sigma, uRange: range, uRadius: radius };
+    this.pass('blur', BLUR, mid, { uTex: src.tex }, { ...u, uStep: [1, 0] });
+    this.pass('blur', BLUR, dst, { uTex: mid.tex }, { ...u, uStep: [0, 1] });
+  }
+
+  private uploadMask(mask: HTMLCanvasElement | OffscreenCanvas, w: number, h: number): Target {
+    const gl = this.gl;
+    const raw = this.target(w, h, false, false);
+    gl.bindTexture(gl.TEXTURE_2D, raw.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, mask as TexImageSource);
+    return raw;
+  }
+
+  /** Run the edit pipeline for the preview. Geometry gives the unedited frame; later passes ping-pong into 'edited' targets. */
   renderWork(plan: Plan) {
     const gl = this.gl, { w, h } = plan;
-    if (!this.work || this.work.w !== w || this.work.h !== h) { this.free(this.work); this.free(this.edited); this.work = this.target(w, h, true, true); this.edited = null; }
+    if (!this.work || this.work.w !== w || this.work.h !== h) {
+      this.free(this.work); this.free(this.edited); this.free(this.maskTex); this.work = this.target(w, h, true, true); this.edited = null; this.maskTex = null; this.maskKey = '';
+    }
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = this.work;
-    if (plan.light) {
-      this.edited ??= this.target(w, h, true, true);
-      const L = plan.light;
-      this.runLight(this.work, this.edited, [L.exposure, L.contrast / 100, L.warmth / 100, L.saturation / 100]);
-      gl.bindTexture(gl.TEXTURE_2D, this.edited.tex); gl.generateMipmap(gl.TEXTURE_2D);
-      this.out = this.edited;
+    if (!plan.smooth && !plan.light) return;
+    this.edited ??= this.target(w, h, true, true);
+    let cur: Target = this.work;
+    const flip = this.temp(3, w, h, true);
+    const next = (): Target => (cur === this.edited ? flip : this.edited!);
+    if (plan.smooth) {
+      const sp = plan.smooth;
+      if (this.maskKey !== sp.maskKey || !this.maskTex) {
+        const fw = sp.fw, feather = Math.max(2, 0.015 * fw);
+        const raw = this.uploadMask(sp.mask, w, h);
+        this.free(this.maskTex); this.maskTex = this.target(w, h, true, false);
+        this.blur(raw, this.maskTex, this.temp(0, w, h), feather / 2, 0);
+        this.free(raw); this.maskKey = sp.maskKey;
+      }
+      const sigmaS = 0.012 * sp.fw, s = sp.strength / 100;
+      const t1 = this.temp(0, w, h), t2 = this.temp(1, w, h), t3 = this.temp(2, w, h);
+      this.blur(cur, t2, t1, Math.max(1, sigmaS), 0.04 + 0.12 * s);            // edge-aware base
+      this.blur(cur, t3, t1, Math.max(0.6, 0.0025 * sp.fw), 0);               // fine-detail reference
+      const dst = next();
+      this.pass('smooth', SMOOTH, dst, { uOrig: cur.tex, uBase: t2.tex, uFine: t3.tex, uMask: this.maskTex.tex },
+        { uP: [s, sp.keep / 100, sp.skin.cb, sp.skin.cr], uTol: sp.skin.tol });
+      cur = dst;
     }
+    if (plan.light) {
+      const L = plan.light, dst = next();
+      this.pass('light', LIGHT, dst, { uTex: cur.tex }, { uA: [L.exposure, L.contrast / 100, L.warmth / 100, L.saturation / 100] });
+      cur = dst;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, cur.tex); gl.generateMipmap(gl.TEXTURE_2D);
+    this.out = cur;
   }
 
-  private runLight(src: Target, dst: Target, a: [number, number, number, number]) {
-    const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo); gl.viewport(0, 0, dst.w, dst.h);
-    gl.useProgram(this.progLight); gl.bindVertexArray(this.vao);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
-    gl.uniform1i(gl.getUniformLocation(this.progLight, 'uTex'), 0);
-    gl.uniform4f(gl.getUniformLocation(this.progLight, 'uA'), a[0], a[1], a[2], a[3]);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  /** The feathered mask of the last smooth pass (tests). */
+  readMask(): { w: number; h: number; data: Float32Array } | null {
+    const gl = this.gl, t = this.maskTex; if (!t) return null;
+    const px = new Float32Array(t.w * t.h * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo); gl.readPixels(0, 0, t.w, t.h, gl.RGBA, gl.FLOAT, px);
+    return { w: t.w, h: t.h, data: px };
   }
 
   /** Pixels of the "after" frame (RGBA8 copy via a throwaway pass is not needed for tests; reads the half-float target). */
@@ -246,5 +369,5 @@ export class Renderer {
   /** Read the presented canvas (tests). */
   readCanvas(w: number, h: number): Uint8Array { const o = new Uint8Array(w * h * 4); this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); this.gl.readPixels(0, 0, w, h, this.gl.RGBA, this.gl.UNSIGNED_BYTE, o); return o; }
 
-  dispose() { this.free(this.work); this.free(this.edited); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
+  dispose() { this.free(this.work); this.free(this.edited); this.free(this.maskTex); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
 }

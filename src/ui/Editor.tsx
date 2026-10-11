@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useStore, geometryOf, lightOf, isLightIdentity } from '../store';
+import { useStore, geometryOf, lightOf, isLightIdentity, smoothOf } from '../store';
 import { LightPanel } from './LightPanel';
-import { Renderer, type View } from '../gl/renderer';
+import { SmoothPanel } from './SmoothPanel';
+import { rasterMask } from '../core/facemask';
+import { skinStats } from '../core/skin';
+import { invert, apply } from '../core/geometry';
+import { Renderer, type View, type SmoothParams } from '../gl/renderer';
 import { outToSource, outputSize, type Geometry } from '../core/geometry';
 import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'crop' | 'light' | 'faces' | 'export';
+type Panel = 'crop' | 'smooth' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -33,16 +37,30 @@ export function Editor() {
   const split = useStore((s) => s.split);
   const g: Geometry = geometryOf(history); // compare keeps the framing so before and after stay pixel-aligned
   const light = lightOf(history);
+  const sm = smoothOf(history);
+  const maskCache = useRef<{ key: string; canvas: OffscreenCanvas | HTMLCanvasElement } | null>(null);
+  const skinCache = useRef(new Map<number, { cb: number; cr: number; tol: number }>());
   const showLight = !compare && !isLightIdentity(light);
   const k = image.previewScale;
   splitRef.current = split ? (splitRef.current >= 0 ? splitRef.current : size.w / 2) : -1;
+  const smoothFace = !compare && sm.strength > 0 ? (faces?.find((f) => f.id === (sm.face ?? activeFace)) ?? null) : null;
   const work = useMemo(() => {
     const [ow, oh] = outputSize(g, image.width, image.height);
     const w = Math.max(1, Math.round(ow * k)), h = Math.max(1, Math.round(oh * k));
     const m = outToSource(g, image.width, image.height, w / k, h / k);
     // source px -> preview px
-    return { w, h, light: showLight ? light : null, m: [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number] };
-  }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation]);
+    const mm = [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number];
+    let smooth: SmoothParams | null = null;
+    if (smoothFace && smoothFace.mesh.length >= 468) {
+      const inv = invert(mm), key = `${smoothFace.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}`;
+      if (maskCache.current?.key !== key) maskCache.current = { key, canvas: rasterMask(smoothFace.mesh as [number, number, number][], w, h, (x, y) => apply(inv, x, y)) };
+      let st = skinCache.current.get(smoothFace.id);
+      if (!st) { st = skinStats(image.preview, smoothFace.mesh as [number, number, number][], smoothFace.box[2]); skinCache.current.set(smoothFace.id, st); }
+      const scale = Math.sqrt(Math.abs(inv[0] * inv[4] - inv[1] * inv[3]));
+      smooth = { strength: sm.strength, keep: sm.keep, mask: maskCache.current.canvas, maskKey: key, fw: smoothFace.box[2] * scale, skin: st };
+    }
+    return { w, h, light: showLight ? light : null, smooth, m: mm };
+  }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation, smoothFace, sm.strength, sm.keep]);
 
   const facesRef = useRef({ faces, activeFace, m: work.m, w: work.w, h: work.h });
   facesRef.current = { faces, activeFace, m: work.m, w: work.w, h: work.h };
@@ -177,10 +195,11 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'crop' ? <CropPanel /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <SmoothPanel /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'crop'} onClick={() => setPanel('crop')} data-testid="tool-crop">Crop &amp; rotate</button>
+        <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
         <button aria-pressed={panel === 'faces'} onClick={() => setPanel('faces')} data-testid="tool-faces">Faces</button>
         <button aria-pressed={panel === 'export'} onClick={() => setPanel('export')} data-testid="tool-export">Export</button>
