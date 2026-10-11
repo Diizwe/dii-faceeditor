@@ -699,7 +699,8 @@
   {
    "id": "stress48",
    "what": "54MP original of File:Naomi Selvaratnam (33071149821).jpg (CC BY 4.0)",
-   "status": "Commons throttles original downloads (Retry-After 600); fetch in a later run, once, politely"
+   "status": "Commons throttles original downloads (Retry-After 600); fetch in a later run, once, politely",
+   "note": "9000x6000 = 54 MP, satisfying the plan's '48MP photo' stress requirement (>=48 MP)."
   }
  ]
 }

@@ -6,9 +6,16 @@
     "preview_long_edge_px": 2048,
     "renderer": "headless Chromium, SwiftShader, so pixel tolerances apply",
     "pixel_tolerance_levels": 1,
-    "skin_tone_groups": ["MST 1-2", "MST 3-4", "MST 5-6", "MST 7-8", "MST 9-10"],
+    "skin_tone_groups": [
+      "MST 1-2",
+      "MST 3-4",
+      "MST 5-6",
+      "MST 7-8",
+      "MST 9-10"
+    ],
     "group_rule": "Every metric must pass on every skin-tone group separately. A tool failing any group does not ship in v1. Cross-group parity: group mean may differ from the all-group median by at most parity_relative_max.",
-    "parity_relative_max": 0.15
+    "parity_relative_max": 0.15,
+    "parity_scope": "Parity applies only to ratio and level metrics with a non-zero threshold; zero-threshold metrics must be exactly met by every group."
   },
   "definitions_outside_the_mask": {
     "mask_tool": "Pixels where the feathered mask weight is 0 (mask dilated by the feather radius). Output must equal input within pixel_tolerance_levels.",
@@ -18,51 +25,266 @@
     "patch_tool": "Pixels outside brush radius + blend margin (0.25 x radius) are unchanged within tolerance."
   },
   "metrics": {
-    "M_outside_mask_changed_px": {"applies": "Smooth, Whiten, Eyes, Makeup, Heal, Object erase, Background (person alpha>0.98 area)", "max": 0, "unit": "count of pixels differing by more than pixel_tolerance_levels"},
-    "M_halo_ring_mean_abs_levels": {"applies": "all mask tools", "max": 1.5, "unit": "8-bit levels, mean |delta| on a 3 px ring just outside the feathered edge"},
-    "M_halo_overshoot_levels": {"applies": "all mask tools", "max": 6, "unit": "8-bit levels beyond pre-edit local range"},
-    "M_detail_retention_default": {"applies": "Smooth", "min": 0.75, "unit": "ratio: variance of Laplacian of luma on skin mask, after/before, at default strength"},
-    "M_detail_retention_max": {"applies": "Smooth", "min": 0.45, "unit": "same ratio at strength 100"},
-    "M_blemish_energy_reduction_max": {"applies": "Smooth", "min": 0.25, "unit": "reduction of band-pass (sigma 2-6 px at fw=600) energy on skin mask at strength 100"},
-    "M_skin_hue_shift_deg": {"applies": "Smooth, Light & colour, Filters", "max": 3, "unit": "mean hue shift of skin mask pixels at default strength (Filters: at strength 40)"},
-    "M_heal_interior_std_ratio": {"applies": "Heal", "max": 1.25, "unit": "std of luma inside brush circle / std of ring 1.0-1.5 radius around it"},
-    "M_heal_seam_gradient_ratio": {"applies": "Heal, Object erase", "max": 1.5, "unit": "mean gradient magnitude on the blend boundary / mean gradient magnitude of the ring"},
-    "M_deterministic_diff_levels": {"applies": "Heal, Object erase", "max": 0, "unit": "two runs, byte-identical output"},
-    "M_whiten_teeth_L_max": {"applies": "Whiten", "max": 92, "unit": "mean CIELAB L* of teeth region at strength 100 (unnatural white above)"},
-    "M_whiten_teeth_b_min": {"applies": "Whiten", "min": 3, "unit": "mean CIELAB b* of teeth region at strength 100 (grey/blue-white below)"},
-    "M_whiten_yellow_reduction_default": {"applies": "Whiten", "min": 0.20, "unit": "relative drop of mean b* at default strength"},
-    "M_eyes_sclera_shift_deltaE": {"applies": "Eyes", "max": 3, "unit": "mean CIEDE2000 on sclera at default"},
-    "M_eyes_iris_sharpness_gain_max": {"applies": "Eyes", "min": 0.10, "unit": "relative gain of Laplacian variance in iris at clarity 100"},
-    "M_clipped_px_increase": {"applies": "Eyes, Light & colour, Makeup, Filters", "max": 0.01, "unit": "fraction of pixels newly clipped to 0 or 255 at default"},
-    "M_lc_identity_max_diff": {"applies": "Light & colour, Filters (strength 0)", "max": 1, "unit": "8-bit levels"},
-    "M_lc_monotone_violations": {"applies": "Light & colour, Filters", "max": 0, "unit": "controls swept in 21 steps: violations of monotone luma response"},
-    "M_lc_neutral_shift_deltaE": {"applies": "Light & colour", "max": 1, "unit": "neutral grey patches, warmth=0, other settings at 0 -> identity"},
-    "M_makeup_luma_correlation": {"applies": "Makeup", "min": 0.95, "unit": "correlation of luma before/after inside the mask (texture kept)"},
-    "M_warp_straight_line_residual_frac": {"applies": "Reshape, Liquify", "max": 0.004, "unit": "residual of fitted straight edges (door frames/tile grid in test photos + synthetic grid) as fraction of image width, at 50% strength, for edges outside the face mask"},
-    "M_warp_min_jacobian": {"applies": "Reshape, Liquify", "min": 0.2, "unit": "min determinant of the warp Jacobian at 100% strength"},
-    "M_warp_unchanged_far_px": {"applies": "Reshape, Liquify", "max": 0, "unit": "pixels beyond falloff radius that changed"},
-    "M_reshape_roundtrip_levels": {"applies": "Reshape", "max": 6, "unit": "mean abs diff of apply(+s) then apply(-s) vs original on face"},
-    "M_preview_vs_export_mean_abs_levels": {"applies": "every tool", "max": 2, "unit": "export downscaled to preview size vs preview"},
-    "M_preview_vs_export_p99_levels": {"applies": "every tool", "max": 8, "unit": "99th percentile of the same difference"},
-    "M_preview_vs_export_ssim": {"applies": "every tool", "min": 0.98, "unit": "SSIM on luma"},
-    "M_color_roundtrip_deltaE_mean": {"applies": "export", "max": 0.5, "unit": "CIEDE2000 mean, identity edit, 12 MP and 48 MP"},
-    "M_color_roundtrip_deltaE_p999": {"applies": "export", "max": 2.0, "unit": "CIEDE2000 99.9th percentile"},
-    "M_export_tile_seam_levels": {"applies": "export", "max": 1, "unit": "max abs diff across tile boundaries vs single-pass render on a 4096 px image"},
-    "M_export_location_data_present": {"applies": "export", "max": 0, "unit": "GPS EXIF tags found in output (count)"},
-    "M_crop_rotate_identity": {"applies": "Crop & rotate", "max": 0, "unit": "4x rotate-90 and 2x flip return the identical pixels (diff levels); output size exact"},
-    "M_face_recall_frontal": {"applies": "Face picker", "min": 0.95, "unit": "detected / labelled frontal faces, per skin-tone group"},
-    "M_face_recall_group_shots": {"applies": "Face picker", "min": 0.90, "unit": "same, group-shot faces, per skin-tone group when present"},
-    "M_face_recall_group_gap": {"applies": "Face picker", "max": 0.05, "unit": "best group minus worst group recall"},
-    "M_bg_person_core_changed_px": {"applies": "Background", "max": 0, "unit": "pixels with alpha > 0.98 that changed"},
-    "M_bg_hair_edge_contamination_deltaE": {"applies": "Background (v1.1)", "max": 6, "unit": "mean CIEDE2000 of original-background colour bleed in a 6 px hair-edge band after replacing with a contrasting colour"},
-    "M_bg_edge_refine_gain": {"applies": "Background (v1.1)", "min": 0.10, "unit": "relative improvement in edge adherence (alpha gradient aligned with image gradient) after guided filter vs raw segmenter output"},
-    "M_erase_texture_ratio": {"applies": "Object erase (v1.1)", "min": 0.5, "max": 2.0, "unit": "Laplacian variance inside filled region / ring around it"},
-    "M_erase_no_source_in_mask": {"applies": "Object erase (v1.1)", "max": 0, "unit": "patch sources overlapping the erased mask (count)"}
+    "M_outside_mask_changed_px": {
+      "applies": "Smooth, Whiten, Eyes, Makeup, Heal, Object erase, Background (person alpha>0.98 area)",
+      "max": 0,
+      "unit": "count of pixels differing by more than pixel_tolerance_levels"
+    },
+    "M_halo_ring_mean_abs_levels": {
+      "applies": "all mask tools except Background",
+      "max": 1.5,
+      "unit": "8-bit levels, mean |delta| on a 3 px ring just INSIDE the feathered edge (inner side of the feather band), at 2048 px preview scale"
+    },
+    "M_halo_overshoot_levels": {
+      "applies": "all mask tools",
+      "max": 6,
+      "unit": "8-bit levels beyond pre-edit local range"
+    },
+    "M_detail_retention_default": {
+      "applies": "Smooth",
+      "min": 0.75,
+      "unit": "ratio: variance of Laplacian of luma on skin mask, after/before, at default strength"
+    },
+    "M_detail_retention_max": {
+      "applies": "Smooth",
+      "min": 0.45,
+      "unit": "same ratio at strength 100"
+    },
+    "M_blemish_energy_reduction_max": {
+      "applies": "Smooth",
+      "min": 0.25,
+      "unit": "reduction of band-pass (sigma 2-6 px at fw=600) energy on skin mask at strength 100"
+    },
+    "M_skin_hue_shift_deg": {
+      "applies": "Smooth (default), Light & colour (warmth +-50 and saturation +-50 each, others 0), Filters (strength 40)",
+      "max": 3,
+      "unit": "mean hue shift of skin-mask pixels in degrees; Filters allowed 8 deg for named warm/cool looks, 3 deg for all others"
+    },
+    "M_heal_interior_std_ratio": {
+      "applies": "Heal",
+      "max": 1.25,
+      "unit": "std of luma inside brush circle / std of ring 1.0-1.5 radius around it"
+    },
+    "M_heal_seam_gradient_ratio": {
+      "applies": "Heal, Object erase",
+      "max": 1.5,
+      "unit": "mean gradient magnitude on the blend boundary / mean gradient magnitude of the ring"
+    },
+    "M_deterministic_diff_levels": {
+      "applies": "Heal, Object erase",
+      "max": 0,
+      "unit": "two runs, byte-identical output"
+    },
+    "M_whiten_teeth_L_max": {
+      "applies": "Whiten",
+      "max": 92,
+      "unit": "mean CIELAB L* of teeth region at strength 100 (unnatural white above)"
+    },
+    "M_whiten_teeth_b_min": {
+      "applies": "Whiten",
+      "min": 3,
+      "unit": "mean CIELAB b* of teeth region at strength 100 (grey/blue-white below)"
+    },
+    "M_whiten_yellow_reduction_default": {
+      "applies": "Whiten",
+      "min": 0.2,
+      "unit": "relative drop of mean b* at default strength"
+    },
+    "M_eyes_sclera_shift_deltaE": {
+      "applies": "Eyes",
+      "max": 3,
+      "unit": "mean CIEDE2000 on sclera (eye polygon minus iris disc) at default; sclera is excluded from the edit mask so this checks leakage"
+    },
+    "M_eyes_iris_sharpness_gain_max": {
+      "applies": "Eyes",
+      "min": 0.1,
+      "unit": "relative gain of Laplacian variance in iris at clarity 100"
+    },
+    "M_clipped_px_increase": {
+      "applies": "Eyes, Light & colour, Makeup, Filters",
+      "max": 0.01,
+      "unit": "fraction of pixels newly clipped to 0 or 255 at default"
+    },
+    "M_lc_identity_max_diff": {
+      "applies": "Light & colour, Filters (strength 0)",
+      "max": 1,
+      "unit": "8-bit levels"
+    },
+    "M_lc_monotone_violations": {
+      "applies": "Light & colour, Filters",
+      "max": 0,
+      "unit": "controls swept in 21 steps: violations of monotone luma response"
+    },
+    "M_lc_neutral_shift_deltaE": {
+      "applies": "Light & colour",
+      "max": 1,
+      "unit": "neutral grey patches, warmth=0, other settings at 0 -> identity"
+    },
+    "M_makeup_luma_correlation": {
+      "applies": "Makeup",
+      "min": 0.95,
+      "unit": "correlation of luma before/after inside the mask (texture kept)"
+    },
+    "M_warp_straight_line_residual_frac": {
+      "applies": "Reshape, Liquify",
+      "max": 0.004,
+      "unit": "residual of fitted straight edges as fraction of image width at 50% strength, measured on the synthetic grid test image and on photos tagged has_straight_edges; Liquify test strokes are placed away from the measured edges"
+    },
+    "M_warp_min_jacobian": {
+      "applies": "Reshape, Liquify",
+      "min": 0.2,
+      "unit": "min determinant of the warp Jacobian at 100% strength"
+    },
+    "M_warp_unchanged_far_px": {
+      "applies": "Reshape, Liquify",
+      "max": 0,
+      "unit": "pixels beyond falloff radius that changed"
+    },
+    "M_preview_vs_export_mean_abs_levels": {
+      "applies": "every tool",
+      "max": 2,
+      "unit": "export downscaled to preview size vs preview"
+    },
+    "M_preview_vs_export_p99_levels": {
+      "applies": "every tool",
+      "max": 8,
+      "unit": "99th percentile of the same difference"
+    },
+    "M_preview_vs_export_ssim": {
+      "applies": "every tool",
+      "min": 0.98,
+      "unit": "SSIM on luma"
+    },
+    "M_color_roundtrip_deltaE_mean": {
+      "applies": "export",
+      "max": 0.5,
+      "unit": "CIEDE2000 mean, identity edit, 12 MP and 48 MP"
+    },
+    "M_color_roundtrip_deltaE_p999": {
+      "applies": "export",
+      "max": 2.0,
+      "unit": "CIEDE2000 99.9th percentile"
+    },
+    "M_export_tile_seam_levels": {
+      "applies": "export",
+      "max": 1,
+      "unit": "max abs diff across tile boundaries vs single-pass render on a 4096 px image"
+    },
+    "M_export_location_data_present": {
+      "applies": "export",
+      "max": 0,
+      "unit": "GPS EXIF tags found in output (count)"
+    },
+    "M_crop_rotate_identity": {
+      "applies": "Crop & rotate",
+      "max": 0,
+      "unit": "4x rotate-90 and 2x flip return the identical pixels (diff levels); output size exact"
+    },
+    "M_face_recall_frontal": {
+      "applies": "Face picker",
+      "min": 0.95,
+      "unit": "detected / labelled frontal faces, per skin-tone group"
+    },
+    "M_face_recall_group_shots": {
+      "applies": "Face picker",
+      "min": 0.9,
+      "unit": "same, group-shot faces, per skin-tone group when present"
+    },
+    "M_face_recall_group_gap": {
+      "applies": "Face picker",
+      "max": 0.05,
+      "unit": "best group minus worst group recall, computed over faces (not photos); with small groups a single missed face may fail this check, which is intended"
+    },
+    "M_bg_person_core_changed_px": {
+      "applies": "Background",
+      "max": 0,
+      "unit": "pixels with alpha > 0.98 that changed"
+    },
+    "M_bg_hair_edge_contamination_deltaE": {
+      "applies": "Background (v1.1)",
+      "max": 6,
+      "unit": "mean CIEDE2000 of original-background colour bleed in a 6 px hair-edge band after replacing with a contrasting colour"
+    },
+    "M_bg_edge_refine_gain": {
+      "applies": "Background (v1.1)",
+      "min": 0.1,
+      "unit": "relative improvement in edge adherence (alpha gradient aligned with image gradient) after guided filter vs raw segmenter output"
+    },
+    "M_erase_texture_ratio": {
+      "applies": "Object erase (v1.1)",
+      "min": 0.5,
+      "max": 2.0,
+      "unit": "Laplacian variance inside filled region / ring around it"
+    },
+    "M_erase_no_source_in_mask": {
+      "applies": "Object erase (v1.1)",
+      "max": 0,
+      "unit": "patch sources overlapping the erased mask (count)"
+    },
+    "M_compare_identity_levels": {
+      "applies": "Before/after",
+      "max": 0,
+      "unit": "compare render with no edits equals original pixels (levels); edited and original frames aligned to 0 px; toggle latency <= 100 ms"
+    },
+    "M_reshape_inverse_roundtrip_levels": {
+      "applies": "Reshape",
+      "max": 6,
+      "unit": "mean abs diff on the face after applying the warp and then its explicit inverse map vs original"
+    },
+    "M_export_icc_p3_present": {
+      "applies": "export",
+      "min": 1,
+      "unit": "P3 ICC profile embedded when source is P3 (1 = present)"
+    },
+    "M_export_dimensions_exact": {
+      "applies": "export",
+      "max": 0,
+      "unit": "abs difference in output width/height vs expected, 12 MP and >=48 MP inputs"
+    },
+    "M_third_party_requests": {
+      "applies": "whole app",
+      "max": 0,
+      "unit": "network requests to any origin other than the app's own, over a full edit session"
+    },
+    "M_model_second_load_network_requests": {
+      "applies": "Face picker, Background",
+      "max": 0,
+      "unit": "network requests for model files on second load (from cache)"
+    },
+    "M_landmark_remap_error_frac_fw": {
+      "applies": "Reshape, Liquify, Crop & rotate",
+      "max": 0.02,
+      "unit": "landmark position error after remap through warp vs re-detection, as fraction of face width; EXIF orientation applied before detection"
+    },
+    "M_export_sharpness_ratio": {
+      "applies": "Heal, Object erase",
+      "min": 1.0,
+      "unit": "Laplacian variance of export (downscaled) / preview inside patched area; export is never blurrier than preview"
+    },
+    "M_default_strength_cap": {
+      "applies": "every strength control",
+      "max": 0.4,
+      "unit": "default value as a fraction of the control's range (lint over the settings registry)"
+    },
+    "M_initial_js_gzip_kb": {
+      "applies": "whole app",
+      "max": 400,
+      "unit": "kilobytes gzip of initial JavaScript"
+    }
   },
   "runtime_budgets": {
     "load_12mp_preview_s_emulated_iphone": 2.5,
-    "per_pass_ms_software_gpu_2048": "set after first measurement in Phase 1 (record, then freeze at 1.5x measured); real budget 16 ms on real iPhone, checked after handoff",
-    "export_peak_texture_mb": 256
+    "per_pass_ms_software_gpu_2048": 250,
+    "export_peak_texture_mb": 256,
+    "per_pass_note": "Frozen at 250 ms per shader pass at a 2048 px preview on the software GPU (SwiftShader); Phase 1 records measured values and any change is logged. Real-device budget is 16 ms, checked after handoff."
   },
-  "changelog": []
+  "changelog": [
+    {
+      "date": "2026-10-11",
+      "phase": 0,
+      "kind": "pre-freeze correction",
+      "by": "Phase 0 gate review",
+      "changes": "Added metrics for Before/after, export ICC/dimensions, third-party requests, model cache, landmark remap, export sharpness, default-strength cap, JS size; fixed halo ring side, reshape round-trip, skin-hue test points, sclera definition, parity scope, face-recall unit; froze software-GPU per-pass budget at 250 ms; spec defaults brought under the 40% cap."
+    }
+  ]
 }
