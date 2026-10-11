@@ -28,7 +28,7 @@
     {
       "id": "0.2",
       "title": "Re-verify environment facts (npm, GitHub, WebGL2 float targets, blocked hosts)",
-      "status": "partial: npm OK; human-models 3.0.4 MIT has selfie/meet/iris/facemesh/blazeface; rvm.bin present (do NOT use)"
+      "status": "done"
     },
     {
       "id": "0.3",
@@ -43,17 +43,27 @@
     {
       "id": "0.5",
       "title": "Test-photo grid from CC0/CC BY GitHub-hosted sources; coverage check (min 24 photos, >=3 per skin-tone group)",
-      "status": "in_progress: crawling Wikimedia Commons (CC0/CC BY/PD only) with rate-limit backoff"
+      "status": "done (48MP original pending): 33 photos, min group 5, coverage met; see testdata/COVERAGE.md"
     },
     {
       "id": "0.6",
       "title": "Install agent skills at pinned commits; confirm they run on workspace Chromium",
-      "status": "done: 20 skills pinned in .agent-skills; Remotion renders on workspace Chromium (browserExecutable); playwright-core drives sparticuz chromium"
+      "status": "done"
     },
     {
       "id": "0.7",
       "title": "Headless WebGL2 shader proof",
       "status": "done: WebGL2 + EXT_color_buffer_float OK in sparticuz chromium, maxTex 8192 (2026-10-11)"
+    },
+    {
+      "id": "0.8",
+      "title": "Fetch 54MP original (stress48) once Commons Retry-After lapses; store at testdata/stress/stress48.jpg",
+      "status": "todo"
+    },
+    {
+      "id": "0.9",
+      "title": "Phase 0 gate: reviewer agent checks spec/thresholds/rubrics vs plan; then FYI notification and move to Phase 1",
+      "status": "todo"
     }
   ],
   "open_failures": [],
