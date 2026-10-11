@@ -52,3 +52,21 @@ Running totals (updated each run): runs used 1 of 50 · infrastructure spend $0 
 - Measured per-pass time on the software GPU: geometry pass 1.8 ms at a 1280x1920 working frame. The frozen 250 ms budget stays (later passes are heavier).
 
 **Schedule change (2026-10-11, from the setup session):** the wake-up trigger is now `trig_01G42TfmtLTVFQo6nnhvHp15` (every 4 h at :20 past 01/05/09/13/17/21 UTC, bound to this persistent session). Scheduled routines created via the routine tool cannot attach repo sources, so the schedule wakes this persistent session rather than starting new ones; the old routine `trig_01PHSqXnvQhVJjwyTU7WHcgQ` is disabled. The 21:20Z fire landed mid-run and was treated as 'lock held'.
+
+### Run 2, Phase 2 progress (objective results, all on the 33-photo grid, per skin-tone group)
+| Tool | Result |
+|------|--------|
+| Light & colour | identity 0 levels; 0 monotone violations; skin hue shift <= 0.5 deg on every group; compare/hold 17 ms |
+| Smooth | outside-mask changed px 0; overshoot 0; halo ring ~0; detail kept 0.91-1.05 at default and 0.66-0.89 at max; blemish energy cut 0.43-0.57; hue shift <= 1.4 deg; **cross-group parity fails** on detail-retention-max (24% off the median) and blemish reduction (30%) |
+| Eyes | all checks pass on every group (24 of 33 photos show an iris; sclera leakage ~0 dE, iris sharpness gain 1.8-4.1) |
+| Whiten | L* max and outside/clipping pass; b* floor and yellow reduction failed on first run, shader retuned (retest pending); no MST 1-2 photo with visible teeth |
+| Heal | outside 0, deterministic, std ratio and seam ratio pass on 4 of 5 groups (5-6 failed at 1.29 and 1.64); retuned with gradient-domain feathering and texture matching (retest pending) |
+| Preview vs export | mean 0, p99 0, SSIM ~1 for smooth, light and a crop+smooth+light stack on 3 photos |
+
+**Bugs the tests found (all fixed)**
+- Exporting a photo with an Adobe RGB profile used the raw values: `createImageBitmap(bitmap, ..., {colorSpaceConversion:'none'})` silently reverts an already converted bitmap. Preview and export now agree (parity test on p21).
+- Face-mask skin protection was missing for pale skin in turned faces because mask holes were wrong; the hue check now samples inside the actual skin mask.
+- Iris landmarks are numbered opposite to the eye outlines in this model build; the iris mask pairs each iris with the nearest outline.
+- The renderer's early return skipped Whiten/Eyes passes.
+
+**Open for run 3:** retest Heal and Whiten; Smooth parity (the range tolerance now follows local brightness, which should remove a real dark-skin bias: a fixed range sigma smoothed dark skin more than light skin); add MST 1-2 photos with visible teeth; fetch the real 54 MP file (task 0.8); reviewer-agent rubric scoring from contact sheets (`node tests/browser/tools.mjs sheets`); thresholds changelog entry clarifying parity on near-zero denominators.

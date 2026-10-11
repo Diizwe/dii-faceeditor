@@ -65,8 +65,12 @@ window.H.withBlemish = async (file) => {
   const mk = (() => { return null; })();
   const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image', colorSpaceConversion: 'none' });
   const c = new OffscreenCanvas(bmp.width, bmp.height), g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
-  const [cx, cy] = f.mesh[205]; const R = Math.max(4, f.box[2] * 0.03);
   const im = g.getImageData(0, 0, c.width, c.height);
+  // pick the calmest skin spot among cheek/forehead landmarks (least edge energy nearby), so the test blemish is not on glasses, hair or lips
+  const R = Math.max(4, f.box[2] * 0.03); let best = Infinity, cx = 0, cy = 0;
+  for (const idx of [205, 425, 50, 280, 117, 346, 118, 347]) { const [px, py] = f.mesh[idx]; let e = 0; const rr = Math.round(R * 3);
+    for (let y = Math.max(1, Math.round(py) - rr); y < Math.min(c.height - 1, Math.round(py) + rr); y += 2) for (let x = Math.max(1, Math.round(px) - rr); x < Math.min(c.width - 1, Math.round(px) + rr); x += 2) { const i = (y * c.width + x) * 4; e += Math.abs(im.data[i] - im.data[i + 4]) + Math.abs(im.data[i] - im.data[i + c.width * 4]); }
+    if (e < best) { best = e; cx = px; cy = py; } }
   for (let y = Math.floor(cy - R * 2); y <= cy + R * 2; y++) for (let x = Math.floor(cx - R * 2); x <= cx + R * 2; x++) {
     const d = Math.hypot(x - cx, y - cy) / R; if (d >= 1 || x < 0 || y < 0 || x >= c.width || y >= c.height) continue;
     const a = (1 - d) ** 1.5 * 0.75, o = (y * c.width + x) * 4; im.data[o] = im.data[o] * (1 - a) + 120 * a; im.data[o + 1] = im.data[o + 1] * (1 - a) + 30 * a; im.data[o + 2] = im.data[o + 2] * (1 - a) + 35 * a;

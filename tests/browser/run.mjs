@@ -55,6 +55,16 @@ const exportTo = async (name, opts) => {
 };
 const colorPy = `
 import sys, json
+def has_exif(b):
+    # walk the JPEG header segments (stop at start-of-scan) looking for APP1/Exif or XMP; compressed data is never searched
+    i = 2
+    while i + 4 < len(b) and b[i] == 0xff:
+        m = b[i + 1]
+        if m == 0xda: break
+        n = (b[i + 2] << 8) | b[i + 3]
+        if m == 0xe1: return True
+        i += 2 + n
+    return False
 sys.path.insert(0, sys.argv[3])
 from colorcheck import lab, de2000
 import numpy as np
@@ -67,7 +77,7 @@ photo=np.ones((h,w),bool); photo[h-h//12-8:,:]=False; photo[:410,:410]=False   #
 d=de2000(lab(a[::st,::st],'p3'),lab(b[::st,::st],'p3'))
 m=photo[::st,::st]
 raw=open(sys.argv[2],'rb').read(); im=Image.open(sys.argv[2])
-print(json.dumps({'all_mean':float(d.mean()),'mean':float(d[m].mean()),'p999':float(np.percentile(d[m],99.9)),'all_p999':float(np.percentile(d,99.9)),'icc':b'Display P3' in im.info.get('icc_profile',b''),'gps':b'GPS' in raw or b'Exif' in raw}))`;
+print(json.dumps({'all_mean':float(d.mean()),'mean':float(d[m].mean()),'p999':float(np.percentile(d[m],99.9)),'all_p999':float(np.percentile(d,99.9)),'icc':b'Display P3' in im.info.get('icc_profile',b''),'gps':has_exif(raw)}))`;
 const py = (code, ...args) => JSON.parse(execFileSync('python3', ['-I', '-c', code, ...args], { maxBuffer: 1 << 28 }).toString());
 
 // ---- 1. 12 MP load (CPU-throttled iPhone profile), colour mode, EXIF orientation
