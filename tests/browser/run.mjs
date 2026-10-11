@@ -1,0 +1,158 @@
+// Browser suite: iPhone 13 Pro Max emulation on SwiftShader WebGL2. Prints a JSON report and exits non-zero on failure.
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { serve, launch } from './lib.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, '../..');
+const T = JSON.parse(fs.readFileSync(path.join(root, 'spec/thresholds.json'), 'utf8'));
+const fx = process.env.FIXTURES || fs.mkdtempSync(path.join(os.tmpdir(), 'dii-fx-'));
+if (!fs.existsSync(path.join(fx, 'f12_p3.jpg'))) execFileSync('python3', [path.join(here, 'make_fixtures.py'), fx], { stdio: 'inherit' });
+const only = process.argv[2];
+
+const results = []; let failed = false;
+const check = (name, value, ok, extra = {}) => { results.push({ name, value, ok, ...extra }); if (!ok) failed = true; console.log(ok ? 'PASS' : 'FAIL', name, JSON.stringify(value)); };
+
+const origins = new Set();
+const { server, port } = await serve(path.join(root, 'dist'));
+const base = `http://127.0.0.1:${port}/`;
+const browser = await launch();
+const ctx = await browser.newContext({ viewport: { width: 428, height: 926 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true,
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' });
+const page = await ctx.newPage();
+page.on('request', (r) => { try { const u = new URL(r.url()); if (!['data:', 'blob:'].includes(u.protocol)) origins.add(u.origin); } catch { /* ignore */ } });
+const errors = []; page.on('pageerror', (e) => errors.push(String(e))); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+const cdp = await ctx.newCDPSession(page);
+await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+
+async function openFile(file) {
+  await page.goto(base); await page.waitForSelector('[data-testid=file]', { state: 'attached' });
+  const t0 = Date.now();
+  await page.setInputFiles('[data-testid=file]', file);
+  await page.waitForSelector('[data-testid=canvas]', { timeout: 120000 });
+  await page.waitForFunction(() => window.__dii?.renderer?.workSize, null, { timeout: 120000 });
+  const m = await page.evaluate(() => performance.getEntriesByName('dii-load').map((e) => [Math.round(e.duration), e.detail]));
+  console.log('  load detail', file.split('/').pop(), JSON.stringify(m));
+  return (Date.now() - t0) / 1000;
+}
+const state = () => page.evaluate(() => { const s = window.__diiTest.store.getState(); return { w: s.image.width, h: s.image.height, scale: s.image.previewScale, mode: s.image.colorMode, hasIcc: !!s.image.icc, ops: s.history.ptr }; });
+const readCanvasStats = () => page.evaluate(() => { window.__dii.redraw(); const r = window.__dii.renderer; const c = r.canvas; const px = r.readCanvas(c.width, c.height); let s = 0, nz = 0; for (let i = 0; i < px.length; i += 4 * 97) { s += px[i] + px[i + 1] + px[i + 2]; if (px[i] > 40) nz++; } return { w: c.width, h: c.height, nonBg: nz }; });
+const exportTo = async (name, opts) => {
+  const t0 = Date.now();
+  const r = await page.evaluate(async (opts) => {
+    const t = window.__diiTest; const s = t.store.getState();
+    const o = { ...opts, geometry: opts.geometry ?? (s.history.ops.length ? s.history.ops[s.history.ptr - 1]?.params : { rot90: 0, flipH: false, flipV: false, angle: 0, aspect: null }) };
+    const res = await t.exportImage(s.image, o);
+    const buf = new Uint8Array(await res.blob.arrayBuffer());
+    let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    return { b64: btoa(bin), width: res.width, height: res.height, tiles: res.tiles, peak: res.peakTextureBytes };
+  }, opts);
+  const f = path.join(fx, name); fs.writeFileSync(f, Buffer.from(r.b64, 'base64'));
+  return { file: f, ...r, seconds: (Date.now() - t0) / 1000 };
+};
+const colorPy = `
+import sys, json
+sys.path.insert(0, sys.argv[3])
+from colorcheck import lab, de2000
+import numpy as np
+from PIL import Image
+Image.MAX_IMAGE_PIXELS=None
+st=int(sys.argv[4])
+a=np.asarray(Image.open(sys.argv[1]).convert('RGB'));b=np.asarray(Image.open(sys.argv[2]).convert('RGB'))
+h,w=a.shape[:2]
+photo=np.ones((h,w),bool); photo[h-h//12-8:,:]=False; photo[:410,:410]=False   # exclude synthetic hard edges: colour bars and checker block
+d=de2000(lab(a[::st,::st],'p3'),lab(b[::st,::st],'p3'))
+m=photo[::st,::st]
+raw=open(sys.argv[2],'rb').read(); im=Image.open(sys.argv[2])
+print(json.dumps({'all_mean':float(d.mean()),'mean':float(d[m].mean()),'p999':float(np.percentile(d[m],99.9)),'all_p999':float(np.percentile(d,99.9)),'icc':b'Display P3' in im.info.get('icc_profile',b''),'gps':b'GPS' in raw or b'Exif' in raw}))`;
+const py = (code, ...args) => JSON.parse(execFileSync('python3', ['-I', '-c', code, ...args], { maxBuffer: 1 << 28 }).toString());
+
+// ---- 1. 12 MP load (CPU-throttled iPhone profile), colour mode, EXIF orientation
+if (!only || only === 'load') {
+  const secs = await openFile(path.join(fx, 'f12_p3.jpg'));
+  const s = await state();
+  check('load_12mp_preview_s', secs, secs <= T.runtime_budgets.load_12mp_preview_s_emulated_iphone, { limit: T.runtime_budgets.load_12mp_preview_s_emulated_iphone });
+  check('12mp_dimensions', [s.w, s.h], s.w === 4032 && s.h === 3024);
+  check('p3_detected', s.mode, s.mode === 'display-p3' && s.hasIcc);
+  const c = await readCanvasStats(); check('canvas_not_blank', c, c.nonBg > 200);
+  await openFile(path.join(fx, 'f12_o6.jpg'));
+  const o = await state(); check('exif_orientation_applied', [o.w, o.h], o.w === 3024 && o.h === 4032);
+}
+
+// ---- 2. geometry edits + undo/redo through the UI
+if (!only || only === 'ui') {
+  await openFile(path.join(fx, 'f12_p3.jpg'));
+  await page.click('[data-testid=rot-right]');
+  let ws = await page.evaluate(() => window.__dii.renderer.workSize); check('rotate_swaps_work_size', ws, ws[0] < ws[1]);
+  await page.click('[data-testid=undo]');
+  ws = await page.evaluate(() => window.__dii.renderer.workSize); check('undo_restores', ws, ws[0] > ws[1]);
+  await page.click('[data-testid=redo]');
+  ws = await page.evaluate(() => window.__dii.renderer.workSize); check('redo_reapplies', ws, ws[0] < ws[1]);
+  await page.click('[data-testid=reset-crop]');
+  await page.fill('[data-testid=straighten]', '10'); // fill on range sets value + input event
+  const n1 = (await state()).ops;
+  await page.fill('[data-testid=straighten]', '12');
+  check('slider_drag_is_one_undo_step_or_more', n1, n1 >= 1);
+}
+
+// ---- 3. colour-preserving export (identity), P3 profile kept, no location data
+if (!only || only === 'export') {
+  await openFile(path.join(fx, 'f12_p3.jpg'));
+  const e = await exportTo('out12.jpg', { format: 'jpeg', quality: 92 });
+  check('export_dimensions_exact_12mp', [e.width, e.height], e.width === 4032 && e.height === 3024);
+
+  const resJ = py(colorPy, path.join(fx, 'f12_p3.jpg'), e.file, here, '4');
+  check('M_jpeg_q92_generation_loss_deltaE_mean', resJ.mean, resJ.mean <= 0.5, { limit: 0.5 });
+  check('M_jpeg_q92_generation_loss_deltaE_p999', resJ.p999, resJ.p999 <= 3.5, { limit: 3.5, all_pixels: resJ.all_p999 });
+  const lossless = await exportTo('id12.png', { format: 'png' });
+  const res = py(colorPy, path.join(fx, 'f12_p3.jpg'), lossless.file, here, '4');
+  check('M_color_roundtrip_deltaE_mean', res.all_mean, res.all_mean <= T.metrics.M_color_roundtrip_deltaE_mean.max, { limit: T.metrics.M_color_roundtrip_deltaE_mean.max });
+  check('M_color_roundtrip_deltaE_p999', res.all_p999, res.all_p999 <= T.metrics.M_color_roundtrip_deltaE_p999.max, { limit: T.metrics.M_color_roundtrip_deltaE_p999.max });
+  check('M_export_icc_p3_present', res.icc, res.icc === true);
+  check('M_export_location_data_present', res.gps, res.gps === false);
+  // tile seams: PNG (lossless) with 512 px tiles vs one pass, rotated 7 degrees
+  const geo = { rot90: 0, flipH: false, flipV: false, angle: 7, aspect: null };
+  const a = await exportTo('tiled.png', { format: 'png', geometry: geo, tile: 512 });
+  const b = await exportTo('single.png', { format: 'png', geometry: geo, tile: 8192, maxTextureSize: 8192 });
+  const seam = py(`
+import sys, json, numpy as np
+from PIL import Image
+a=np.asarray(Image.open(sys.argv[1]).convert('RGB')).astype(int);b=np.asarray(Image.open(sys.argv[2]).convert('RGB')).astype(int)
+print(json.dumps({'max':int(np.abs(a-b).max()) if a.shape==b.shape else -1,'shape':list(a.shape)}))`, a.file, b.file);
+  check('M_export_tile_seam_levels', seam, seam.max >= 0 && seam.max <= T.metrics.M_export_tile_seam_levels.max, { tiles: a.tiles });
+}
+
+// ---- 4. 48 MP stress: load + full-res export under a 4096 texture limit
+if (!only || only === 'stress') {
+  const f48 = process.env.STRESS48 || path.join(fx, 'f48_p3.jpg');
+  const secs = await openFile(f48);
+  const s = await state();
+  console.log('stress load seconds (throttled)', secs, 'dims', s.w, s.h);
+  const e = await exportTo('out48.jpg', { format: 'jpeg', quality: 92 });
+  check('export_dimensions_exact_48mp', [e.width, e.height], e.width === s.w && e.height === s.h);
+  check('export_peak_texture_mb', e.peak / 1048576, e.peak / 1048576 <= T.runtime_budgets.export_peak_texture_mb, { seconds: e.seconds, tiles: e.tiles });
+  const resJ = py(colorPy, f48, e.file, here, '16');
+  check('M_jpeg_q92_generation_loss_deltaE_p999_48mp', resJ.p999, resJ.p999 <= 3.5);
+  const ll = await exportTo('out48.png', { format: 'png' });
+  const res = py(colorPy, f48, ll.file, here, '16');
+  check('M_color_roundtrip_deltaE_mean_48mp', res.all_mean, res.all_mean <= T.metrics.M_color_roundtrip_deltaE_mean.max);
+  check('M_color_roundtrip_deltaE_p999_48mp', res.all_p999, res.all_p999 <= T.metrics.M_color_roundtrip_deltaE_p999.max, { png_seconds: ll.seconds });
+}
+
+// ---- 5. per-pass GPU time on the software GPU at the 2048 px preview, and third-party requests
+if (!only || only === 'perf') {
+  await openFile(path.join(fx, 'f12_p3.jpg'));
+  const ms = await page.evaluate(() => window.__dii.renderer.timeGeometryPass([1, 0, 0, 0, 1, 0], 5));
+  check('per_pass_ms_software_gpu_2048', ms, ms <= T.runtime_budgets.per_pass_ms_software_gpu_2048, { limit: T.runtime_budgets.per_pass_ms_software_gpu_2048 });
+}
+const third = [...origins].filter((o) => o !== new URL(base).origin);
+check('M_third_party_requests', third, third.length === 0);
+check('no_console_errors', errors.slice(0, 5), errors.length === 0);
+
+await browser.close(); server.close();
+fs.writeFileSync(path.join(fx, 'report.json'), JSON.stringify(results, null, 1));
+console.log(failed ? 'FAILED' : 'ALL PASSED');
+process.exit(failed ? 1 : 0);

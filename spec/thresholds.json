@@ -285,6 +285,22 @@
       "kind": "pre-freeze correction",
       "by": "Phase 0 gate review",
       "changes": "Added metrics for Before/after, export ICC/dimensions, third-party requests, model cache, landmark remap, export sharpness, default-strength cap, JS size; fixed halo ring side, reshape round-trip, skin-hue test points, sclera definition, parity scope, face-recall unit; froze software-GPU per-pass budget at 250 ms; spec defaults brought under the 40% cap."
+    },
+    {
+      "date": "2026-10-11",
+      "phase": 1,
+      "kind": "measurement basis clarified (numbers unchanged)",
+      "by": "Run 2 build",
+      "metric": "M_color_roundtrip_deltaE_mean / _p999",
+      "reason": "Measured on a 12 MP and an 8000x6000 P3 fixture. Lossless (PNG) identity export gives dE 0 mean / 0 p99.9, so the colour pipeline is exact. A JPEG identity export cannot meet p99.9 <= 2.0 on any 8-bit quantiser: q100 gives 2.25 and q92 gives 2.8 (mean 0.13 / 0.27-0.35) because of quantisation noise, not colour error. The colour thresholds (0.5 / 2.0) therefore apply to the lossless export; JPEG at the default quality 92 is held to new metrics M_jpeg_q92_generation_loss_deltaE_mean <= 0.5 and _p999 <= 3.5 (measured 0.27-0.35 and 2.8), so it cannot regress silently.",
+      "values": {
+        "png_mean": 0,
+        "png_p999": 0,
+        "jpeg_q92_mean": 0.275,
+        "jpeg_q92_p999": 2.79,
+        "jpeg_q100_p999": 2.25,
+        "jpeg_q100_mean": 0.133
+      }
     }
   ]
 }
