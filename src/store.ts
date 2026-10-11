@@ -13,6 +13,8 @@ interface State {
   error: string | null;
   busy: string | null;
   compare: boolean;
+  split: boolean; // drag-split compare mode
+  setSplit(v: boolean): void;
   faces: Face[] | null; // null = not detected yet
   activeFace: number | null;
   setFaces(f: Face[] | null): void;
@@ -29,7 +31,7 @@ interface State {
 }
 
 export const useStore = create<State>((set) => ({
-  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, faces: null, activeFace: null,
+  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, split: false, setSplit: (split) => set({ split }), faces: null, activeFace: null,
   setFaces: (faces) => set({ faces, activeFace: faces && faces.length === 1 ? faces[0].id : null }),
   setActiveFace: (activeFace) => set({ activeFace }),
   setImage: (image) => set({ image, history: emptyHistory(), error: null, faces: null, activeFace: null }),
@@ -44,4 +46,8 @@ export const useStore = create<State>((set) => ({
 }));
 
 export const geometryOf = (h: History): Geometry => (latest(h, 'geometry')?.params as Geometry | undefined) ?? identityGeometry();
+import type { LightParams } from './gl/renderer';
+import { defaultsOf } from './core/settings';
+export const lightOf = (h: History): LightParams => ({ ...(defaultsOf('light') as unknown as LightParams), ...((latest(h, 'light')?.params as Partial<LightParams> | undefined) ?? {}) });
+export const isLightIdentity = (l: LightParams) => l.exposure === 0 && l.contrast === 0 && l.warmth === 0 && l.saturation === 0;
 export const activeOps = (h: History) => active(h);

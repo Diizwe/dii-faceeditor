@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useStore, geometryOf } from '../store';
+import { useStore, geometryOf, lightOf, isLightIdentity } from '../store';
+import { LightPanel } from './LightPanel';
 import { Renderer, type View } from '../gl/renderer';
-import { identityGeometry, outToSource, outputSize, type Geometry } from '../core/geometry';
+import { outToSource, outputSize, type Geometry } from '../core/geometry';
 import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'crop' | 'faces' | 'export';
+type Panel = 'crop' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -25,18 +26,23 @@ export function Editor() {
   const view = useRef<View>({ zoom: 1, panX: 0, panY: 0 });
   const fitted = useRef('');
   const [size, setSize] = useState({ w: 1, h: 1 });
+  const splitRef = useRef(-1);
   const sizeRef = useRef(size); sizeRef.current = size;
   const [fail, setFail] = useState<string | null>(null);
 
-  const g: Geometry = compare ? identityGeometry() : geometryOf(history);
+  const split = useStore((s) => s.split);
+  const g: Geometry = geometryOf(history); // compare keeps the framing so before and after stay pixel-aligned
+  const light = lightOf(history);
+  const showLight = !compare && !isLightIdentity(light);
   const k = image.previewScale;
+  splitRef.current = split ? (splitRef.current >= 0 ? splitRef.current : size.w / 2) : -1;
   const work = useMemo(() => {
     const [ow, oh] = outputSize(g, image.width, image.height);
     const w = Math.max(1, Math.round(ow * k)), h = Math.max(1, Math.round(oh * k));
     const m = outToSource(g, image.width, image.height, w / k, h / k);
     // source px -> preview px
-    return { w, h, m: [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number] };
-  }, [g, image, k]);
+    return { w, h, light: showLight ? light : null, m: [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number] };
+  }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation]);
 
   const facesRef = useRef({ faces, activeFace, m: work.m, w: work.w, h: work.h });
   facesRef.current = { faces, activeFace, m: work.m, w: work.w, h: work.h };
@@ -60,7 +66,7 @@ export function Editor() {
     const r = rend.current; if (!r) return;
     const cs = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0F1013';
     const n = parseInt(cs.replace('#', ''), 16);
-    r.present(view.current, sizeRef.current.w, sizeRef.current.h, window.devicePixelRatio || 1, [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]);
+    r.present(view.current, sizeRef.current.w, sizeRef.current.h, window.devicePixelRatio || 1, [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255], splitRef.current >= 0 ? splitRef.current : -1);
     drawOverlay();
     if (window.__dii) window.__dii.renders++;
   };
@@ -99,7 +105,7 @@ export function Editor() {
 
   useEffect(() => {
     const r = rend.current; if (!r) return;
-    r.renderWork(work.m, work.w, work.h);
+    r.renderWork(work);
     const key = `${work.w}x${work.h}|${size.w}x${size.h}`;
     if (fitted.current !== key) {
       fitted.current = key;
@@ -110,6 +116,7 @@ export function Editor() {
   }, [work, size, image]);
 
   useEffect(() => { drawOverlay(); }, [faces, activeFace, panel]);
+  useEffect(() => { draw(); }, [split]);
 
   // zoom / pan: wheel, one-pointer drag, two-pointer pinch
   useEffect(() => {
@@ -128,7 +135,9 @@ export function Editor() {
     const onMove = (e: PointerEvent) => {
       const p = pts.get(e.pointerId); if (!p) return;
       const b = rect();
-      if (pts.size === 1) {
+      if (pts.size === 1 && splitRef.current >= 0) {
+        splitRef.current = Math.min(Math.max(e.clientX - b.left, 0), size.w); p.x = e.clientX; p.y = e.clientY; draw();
+      } else if (pts.size === 1) {
         view.current = { ...view.current, panX: view.current.panX + e.clientX - p.x, panY: view.current.panY + e.clientY - p.y };
         p.x = e.clientX; p.y = e.clientY; draw();
       } else if (pts.size === 2) {
@@ -168,10 +177,11 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'crop' ? <CropPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'crop' ? <CropPanel /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'crop'} onClick={() => setPanel('crop')} data-testid="tool-crop">Crop &amp; rotate</button>
+        <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
         <button aria-pressed={panel === 'faces'} onClick={() => setPanel('faces')} data-testid="tool-faces">Faces</button>
         <button aria-pressed={panel === 'export'} onClick={() => setPanel('export')} data-testid="tool-export">Export</button>
       </nav>

@@ -9,6 +9,7 @@ export function App() {
   const history = useStore((s) => s.history);
   const error = useStore((s) => s.error);
   const busy = useStore((s) => s.busy);
+  useStore((s) => s.split);
   const { setImage, setError, setBusy, undo, redo } = useStore.getState();
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -41,6 +42,7 @@ export function App() {
           <button onClick={undo} disabled={!canUndo(history)} aria-label="Undo" data-testid="undo">Undo</button>
           <button onClick={redo} disabled={!canRedo(history)} aria-label="Redo" data-testid="redo">Redo</button>
           <button onPointerDown={() => useStore.getState().setCompare(true)} onPointerUp={() => useStore.getState().setCompare(false)} onPointerLeave={() => useStore.getState().setCompare(false)} aria-label="Hold to compare with the original" data-testid="compare">Compare</button>
+          <button onClick={() => useStore.getState().setSplit(!useStore.getState().split)} aria-pressed={useStore.getState().split} aria-label="Drag to compare" data-testid="split">Split</button>
           <button onClick={() => setImage(null)} aria-label="Choose another photo">New</button>
         </>}
       </header>
