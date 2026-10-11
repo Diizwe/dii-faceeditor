@@ -28,7 +28,7 @@
     {
       "id": "0.2",
       "title": "Re-verify environment facts (npm, GitHub, WebGL2 float targets, blocked hosts)",
-      "status": "todo"
+      "status": "partial: npm OK; human-models 3.0.4 MIT has selfie/meet/iris/facemesh/blazeface; rvm.bin present (do NOT use)"
     },
     {
       "id": "0.3",
@@ -48,12 +48,12 @@
     {
       "id": "0.6",
       "title": "Install agent skills at pinned commits; confirm they run on workspace Chromium",
-      "status": "todo"
+      "status": "partial: 20 skills installed in .agent-skills (pinned, swept); Chromium run-check pending"
     },
     {
       "id": "0.7",
       "title": "Headless WebGL2 shader proof",
-      "status": "todo"
+      "status": "done: WebGL2 + EXT_color_buffer_float OK in sparticuz chromium, maxTex 8192 (2026-10-11)"
     }
   ],
   "open_failures": [],
@@ -62,7 +62,8 @@
     "Remote branch probe-push is an empty leftover from a push test; proxy refuses branch deletion.",
     "Pages live at https://diizwe.github.io/dii-faceeditor/ (verified 2026-10-11).",
     "Scheduled runs have NO connectors (no GitHub MCP, no Docs): read build/PLAN.md, use git over the proxy, check deploys by curling the live URL.",
-    "Plan snapshot is build/PLAN.md; the first ~6k chars (overview/tool table/stack) were extracted from XML; verify against the live doc only if connectors are available."
+    "Plan snapshot is build/PLAN.md; the first ~6k chars (overview/tool table/stack) were extracted from XML; verify against the live doc only if connectors are available.",
+    "Env finding 2026-10-11: huggingface.co, cdn.jsdelivr.net, upload.wikimedia.org, raw.githubusercontent.com (any repo, any sha) and data.jsdelivr.com are reachable from the build workspace, contrary to the earlier probe. api.github.com/codeload for non-attached repos are blocked. App still uses only npm packages + from-scratch code; this only widens where test photos and skills can be sourced."
   ],
   "trigger_id": "trig_01PHSqXnvQhVJjwyTU7WHcgQ"
 }

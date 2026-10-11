@@ -1,0 +1,151 @@
+{
+ "pinned": [
+  {
+   "name": "brainstorming",
+   "repo": "obra/superpowers",
+   "commit": "bb92a77",
+   "phases": "0",
+   "files": 8
+  },
+  {
+   "name": "writing-plans",
+   "repo": "obra/superpowers",
+   "commit": "bb92a77",
+   "phases": "0",
+   "files": 1
+  },
+  {
+   "name": "executing-plans",
+   "repo": "obra/superpowers",
+   "commit": "bb92a77",
+   "phases": "1-6",
+   "files": 3
+  },
+  {
+   "name": "test-driven-development",
+   "repo": "obra/superpowers",
+   "commit": "bb92a77",
+   "phases": "1-6",
+   "files": 2
+  },
+  {
+   "name": "systematic-debugging",
+   "repo": "obra/superpowers",
+   "commit": "bb92a77",
+   "phases": "1-6",
+   "files": 11
+  },
+  {
+   "name": "verification-before-completion",
+   "repo": "obra/superpowers",
+   "commit": "bb92a77",
+   "phases": "1-6",
+   "files": 1
+  },
+  {
+   "name": "frontend-design",
+   "repo": "anthropics/skills",
+   "commit": "dbd4588",
+   "phases": "0-1",
+   "files": 2
+  },
+  {
+   "name": "skill-creator",
+   "repo": "anthropics/skills",
+   "commit": "dbd4588",
+   "phases": "0",
+   "files": 18
+  },
+  {
+   "name": "webapp-testing",
+   "repo": "anthropics/skills",
+   "commit": "dbd4588",
+   "phases": "1-6",
+   "files": 6
+  },
+  {
+   "name": "playwright-cli",
+   "repo": "microsoft/playwright-cli",
+   "commit": "b85c7a7",
+   "phases": "1-6",
+   "files": 11
+  },
+  {
+   "name": "web-design-guidelines",
+   "repo": "vercel-labs/agent-skills",
+   "commit": "063bee9",
+   "phases": "1,5",
+   "files": 1
+  },
+  {
+   "name": "react-best-practices",
+   "repo": "vercel-labs/agent-skills",
+   "commit": "063bee9",
+   "phases": "1-5",
+   "files": 76
+  },
+  {
+   "name": "web-shaders",
+   "repo": "owenob1/web-shaders-agent-kit",
+   "commit": "f027758",
+   "phases": "1-3",
+   "files": 1
+  },
+  {
+   "name": "chrome-devtools",
+   "repo": "ChromeDevTools/chrome-devtools-mcp",
+   "commit": "f08dbe1",
+   "phases": "5",
+   "files": 1
+  },
+  {
+   "name": "chrome-devtools-cli",
+   "repo": "ChromeDevTools/chrome-devtools-mcp",
+   "commit": "f08dbe1",
+   "phases": "5",
+   "files": 2
+  },
+  {
+   "name": "debug-optimize-lcp",
+   "repo": "ChromeDevTools/chrome-devtools-mcp",
+   "commit": "f08dbe1",
+   "phases": "5",
+   "files": 5
+  },
+  {
+   "name": "memory-leak-debugging",
+   "repo": "ChromeDevTools/chrome-devtools-mcp",
+   "commit": "f08dbe1",
+   "phases": "1-5",
+   "files": 2
+  },
+  {
+   "name": "web-perf",
+   "repo": "cloudflare/skills",
+   "commit": "c430dd9",
+   "phases": "5",
+   "files": 1
+  },
+  {
+   "name": "remotion-create",
+   "repo": "remotion-dev/skills",
+   "commit": "32b241b",
+   "phases": "6",
+   "files": 5
+  },
+  {
+   "name": "remotion-render",
+   "repo": "remotion-dev/skills",
+   "commit": "32b241b",
+   "phases": "6",
+   "files": 4
+  }
+ ],
+ "not_installed": [
+  "using-superpowers",
+  "wrangler",
+  "remotion-best-practices",
+  "transformers-js"
+ ],
+ "sweep_flags": []
+}
