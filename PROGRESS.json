@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": null,
-    "acquired_at": null,
+    "held_by": "interactive session_01Vcwbwc1eboVs8Wz34N2j5Q (run 1)",
+    "acquired_at": "2026-10-11T18:06:41Z",
     "expires_after_hours": 4
   },
   "phases": {
