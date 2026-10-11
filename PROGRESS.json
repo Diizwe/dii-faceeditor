@@ -109,7 +109,8 @@
     "Scheduled runs have NO connectors (no GitHub MCP, no Docs): read build/PLAN.md, use git over the proxy, check deploys by curling the live URL.",
     "Plan snapshot is build/PLAN.md; the first ~6k chars (overview/tool table/stack) were extracted from XML; verify against the live doc only if connectors are available.",
     "Env finding 2026-10-11: huggingface.co, cdn.jsdelivr.net, upload.wikimedia.org, raw.githubusercontent.com (any repo, any sha) and data.jsdelivr.com are reachable from the build workspace, contrary to the earlier probe. api.github.com/codeload for non-attached repos are blocked. App still uses only npm packages + from-scratch code; this only widens where test photos and skills can be sourced.",
-    "Run 1 ended at the Phase 0 gate (2026-10-11 ~19:10Z). Next scheduled run starts Phase 1."
+    "Run 1 ended at the Phase 0 gate (2026-10-11 ~19:10Z). Next scheduled run starts Phase 1.",
+    "Trigger changed 2026-10-11 by the setup session (verified with get_trigger: enabled, every 4h at :20 of 01/05/09/13/17/21 UTC, bound to this persistent session). Old trigger trig_01PHSqXnvQhVJjwyTU7WHcgQ is disabled: scheduled routines created via the routine tool cannot attach repo sources, so the schedule wakes this persistent session instead. The 21:20Z fire arrived mid-run 2 and was answered 'lock held' (no work). After Phase 6 disable the new trigger (update_trigger enabled=false) or say so in the final notification."
   ],
-  "trigger_id": "trig_01PHSqXnvQhVJjwyTU7WHcgQ"
+  "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15"
 }

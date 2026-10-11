@@ -18,7 +18,7 @@ void main(){
 
 const LIGHT = `#version 300 es
 precision highp float;
-uniform sampler2D uTex; uniform vec4 uA; // exposure EV, contrast -1..1, warmth -1..1, saturation -1..1
+uniform sampler2D uTex; uniform sampler2D uMask; uniform float uUseMask; uniform vec4 uA; // exposure EV, contrast -1..1, warmth -1..1, saturation -1..1
 out vec4 o;
 vec3 toLin(vec3 c){ return mix(c/12.92, pow((c+0.055)/1.055, vec3(2.4)), step(0.04045, c)); }
 vec3 toEnc(vec3 c){ return mix(c*12.92, 1.055*pow(max(c, vec3(0.0)), vec3(1.0/2.4))-0.055, step(0.0031308, c)); }
@@ -26,17 +26,30 @@ void main(){
   vec3 c = texelFetch(uTex, ivec2(gl_FragCoord.xy), 0).rgb;
   vec3 l = toLin(c);
   l *= exp2(uA.x);
-  // warmth protects skin tones: pixels with a skin-like hue and saturation take only 30% of the shift, so faces stay natural while the scene warms
+  // Warmth protects skin tones: white-balance gains are applied to everything, then for skin-hued, skin-saturated pixels the
+  // result keeps its new luma and chroma size but takes back the original hue direction (hue-preserving), so faces stay natural while the scene warms.
   float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), dd = mx - mn;
   float hue = 0.0;
   if (dd > 1e-4) { hue = (mx == c.r ? mod((c.g - c.b) / dd, 6.0) : mx == c.g ? (c.b - c.r) / dd + 2.0 : (c.r - c.g) / dd + 4.0) * 60.0; if (hue > 180.0) hue -= 360.0; }
   float sat = dd / max(mx, 1e-4);
   float skin = smoothstep(-35.0, -5.0, hue) * (1.0 - smoothstep(50.0, 75.0, hue)) * smoothstep(0.08, 0.2, sat) * (1.0 - smoothstep(0.7, 0.9, sat));
-  float wm = uA.z * (1.0 - 0.7 * skin);
-  vec3 g = vec3(exp(0.18*wm), 1.0, exp(-0.18*wm));
+  // inside the picked face's skin mask every pixel is protected, however grey it is; elsewhere only skin-hued pixels are
+  float fm = uUseMask > 0.5 ? clamp(texelFetch(uMask, ivec2(gl_FragCoord.xy), 0).r, 0.0, 1.0) : 0.0;
+  skin = max(0.9 * skin, fm);
+  vec3 g = vec3(exp(0.18*uA.z), 1.0, exp(-0.18*uA.z));
   g /= dot(g, vec3(0.2126, 0.7152, 0.0722));   // keep luminance, move white balance only
   l *= g;
   vec3 e = toEnc(clamp(l, 0.0, 1.0));
+  {
+    float y0 = dot(c, vec3(0.2126, 0.7152, 0.0722)), y1 = dot(e, vec3(0.2126, 0.7152, 0.0722));
+    vec3 d0 = c - y0, d1 = e - y1;
+    float n0 = length(d0), n1 = length(d1);
+    float kk = min(4.0, n1 / max(n0, 1e-5));
+    vec3 room = mix(y1 / max(-d0, vec3(1e-6)), (1.0 - y1) / max(d0, vec3(1e-6)), step(0.0, d0));
+    kk = min(kk, min(room.r, min(room.g, room.b)));   // never clip: clipping would rotate the hue we are protecting
+    vec3 keep = y1 + d0 * kk;
+    e = mix(e, clamp(keep, 0.0, 1.0), skin);
+  }
   // saturation scales chroma about luma in encoded space, which keeps hue exactly; the gain is limited per pixel so no channel clips
   float Ye = dot(e, vec3(0.2126, 0.7152, 0.0722));
   vec3 d = e - Ye;
@@ -114,13 +127,13 @@ void main(){
 
 export interface View { zoom: number; panX: number; panY: number; }
 export interface LightParams { exposure: number; contrast: number; warmth: number; saturation: number; } // UI ranges: EV -2..2, others -100..100
-export interface SmoothParams {
-  strength: number; keep: number; // 0..100
+export interface FaceMask {
   mask: HTMLCanvasElement | OffscreenCanvas; maskKey: string; // hard mask raster at work size; key changes when it changes
   fw: number; // face width in work px: all radii are multiples of this
   skin: { cb: number; cr: number; tol: number };
 }
-export interface Plan { m: Affine; w: number; h: number; smooth?: SmoothParams | null; light?: LightParams | null; }
+export interface SmoothParams { strength: number; keep: number } // 0..100
+export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; light?: LightParams | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -275,27 +288,31 @@ export class Renderer {
     let cur: Target = this.work;
     const flip = this.temp(3, w, h, true);
     const next = (): Target => (cur === this.edited ? flip : this.edited!);
-    if (plan.smooth) {
-      const sp = plan.smooth;
-      if (this.maskKey !== sp.maskKey || !this.maskTex) {
-        const fw = sp.fw, feather = Math.max(2, 0.015 * fw);
-        const raw = this.uploadMask(sp.mask, w, h);
+    const face = plan.face ?? null;
+    if (face && (plan.smooth || plan.light)) {
+      if (this.maskKey !== face.maskKey || !this.maskTex) {
+        const feather = Math.max(2, 0.015 * face.fw);
+        const raw = this.uploadMask(face.mask, w, h);
         this.free(this.maskTex); this.maskTex = this.target(w, h, true, false);
         this.blur(raw, this.maskTex, this.temp(0, w, h), feather / 2, 0);
-        this.free(raw); this.maskKey = sp.maskKey;
+        this.free(raw); this.maskKey = face.maskKey;
       }
-      const sigmaS = 0.012 * sp.fw, s = sp.strength / 100;
+    }
+    if (plan.smooth && face && this.maskTex) {
+      const sp = plan.smooth;
+      const sigmaS = 0.012 * face.fw, s = sp.strength / 100;
       const t1 = this.temp(0, w, h), t2 = this.temp(1, w, h), t3 = this.temp(2, w, h);
       this.blur(cur, t2, t1, Math.max(1, sigmaS), 0.04 + 0.12 * s);            // edge-aware base
-      this.blur(cur, t3, t1, Math.max(0.6, 0.0025 * sp.fw), 0);               // fine-detail reference
+      this.blur(cur, t3, t1, Math.max(0.6, 0.0025 * face.fw), 0);             // fine-detail reference
       const dst = next();
       this.pass('smooth', SMOOTH, dst, { uOrig: cur.tex, uBase: t2.tex, uFine: t3.tex, uMask: this.maskTex.tex },
-        { uP: [s, sp.keep / 100, sp.skin.cb, sp.skin.cr], uTol: sp.skin.tol });
+        { uP: [s, sp.keep / 100, face.skin.cb, face.skin.cr], uTol: face.skin.tol });
       cur = dst;
     }
     if (plan.light) {
       const L = plan.light, dst = next();
-      this.pass('light', LIGHT, dst, { uTex: cur.tex }, { uA: [L.exposure, L.contrast / 100, L.warmth / 100, L.saturation / 100] });
+      const useMask = face && this.maskTex ? 1 : 0;
+      this.pass('light', LIGHT, dst, { uTex: cur.tex, uMask: (this.maskTex ?? cur).tex }, { uA: [L.exposure, L.contrast / 100, L.warmth / 100, L.saturation / 100], uUseMask: useMask });
       cur = dst;
     }
     gl.bindTexture(gl.TEXTURE_2D, cur.tex); gl.generateMipmap(gl.TEXTURE_2D);
@@ -320,7 +337,7 @@ export class Renderer {
 
   get workSize(): [number, number] | null { return this.work ? [this.work.w, this.work.h] : null; }
 
-  present(view: View, cssW: number, cssH: number, dpr: number, bg: [number, number, number], split = -1) {
+  present(view: View, cssW: number, cssH: number, dpr: number, bg: [number, number, number], split = -1, showBefore = false) {
     const gl = this.gl;
     const W = Math.max(1, Math.round(cssW * dpr)), H = Math.max(1, Math.round(cssH * dpr));
     if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; }
@@ -329,7 +346,7 @@ export class Renderer {
     if (!this.out || !this.work) { gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clear(gl.COLOR_BUFFER_BIT); return; }
     gl.useProgram(this.progPresent);
     gl.bindVertexArray(this.vao);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.out.tex);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, (showBefore ? this.work : this.out).tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.work.tex);
     const u = (n: string) => gl.getUniformLocation(this.progPresent, n);
     gl.uniform1i(u('uTex'), 0); gl.uniform1i(u('uTexB'), 1); gl.uniform1f(u('uSplit'), split < 0 ? -1 : split * dpr);
@@ -353,6 +370,23 @@ export class Renderer {
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, out);
     gl.deleteTexture(this.src.tex); this.free(t);
     this.src = prev;
+    return out;
+  }
+
+  /** Run the full pipeline on one region of a full-resolution source (export tiles) and return the inner rectangle as RGBA8. */
+  renderRegionPixels(bmp: ImageBitmap, plan: Plan, inner: { x: number; y: number; w: number; h: number }): Uint8Array {
+    const gl = this.gl;
+    const prev = this.src, prevOut = this.out;
+    this.src = this.uploadTexture(bmp);
+    this.maskKey = ''; // masks are per region
+    this.renderWork(plan);
+    const t = this.out!;
+    const f = new Float32Array(inner.w * inner.h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+    gl.readPixels(inner.x, inner.y, inner.w, inner.h, gl.RGBA, gl.FLOAT, f);
+    const out = new Uint8Array(inner.w * inner.h * 4);
+    for (let i = 0; i < out.length; i++) out[i] = i % 4 === 3 ? 255 : Math.max(0, Math.min(255, Math.round(f[i] * 255)));
+    gl.deleteTexture(this.src.tex); this.src = prev; this.out = prevOut;
     return out;
   }
 

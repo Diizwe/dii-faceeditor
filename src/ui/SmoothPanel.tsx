@@ -1,24 +1,12 @@
-import { useEffect } from 'react';
 import { useStore, smoothOf } from '../store';
 import { controlsOf } from '../core/settings';
-import { detectFaces } from '../core/faces';
 
 export function SmoothPanel() {
-  const image = useStore((s) => s.image)!;
   const history = useStore((s) => s.history);
   const faces = useStore((s) => s.faces);
   const active = useStore((s) => s.activeFace);
   const S = smoothOf(history) as unknown as Record<string, number>;
   const { edit, endDrag } = useStore.getState();
-  useEffect(() => {
-    if (faces) return;
-    const st = useStore.getState(); let cancelled = false;
-    st.setBusy('Finding faces…');
-    detectFaces(image.preview).then((f) => { if (!cancelled) useStore.getState().setFaces(f); })
-      .catch(() => { useStore.getState().setError('Face tools are unavailable: the face models could not be loaded.'); useStore.getState().setFaces([]); })
-      .finally(() => useStore.getState().setBusy(null));
-    return () => { cancelled = true; };
-  }, [image, faces]);
   return (
     <div data-testid="smooth-panel">
       {faces && faces.length === 0 && <p className="note">No face found, so Smooth is unavailable on this photo.</p>}

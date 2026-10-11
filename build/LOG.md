@@ -50,3 +50,5 @@ Running totals (updated each run): runs used 1 of 50 · infrastructure spend $0 
 **Broke / open**
 - Task 0.8 (real 54 MP original): one attempt at 21:38Z returned 429 again. Next attempt at least 1 h later (next run). The Phase 1 gate keeps this one item open; the synthetic 48 MP passes every check.
 - Measured per-pass time on the software GPU: geometry pass 1.8 ms at a 1280x1920 working frame. The frozen 250 ms budget stays (later passes are heavier).
+
+**Schedule change (2026-10-11, from the setup session):** the wake-up trigger is now `trig_01G42TfmtLTVFQo6nnhvHp15` (every 4 h at :20 past 01/05/09/13/17/21 UTC, bound to this persistent session). Scheduled routines created via the routine tool cannot attach repo sources, so the schedule wakes this persistent session rather than starting new ones; the old routine `trig_01PHSqXnvQhVJjwyTU7WHcgQ` is disabled. The 21:20Z fire landed mid-run and was treated as 'lock held'.

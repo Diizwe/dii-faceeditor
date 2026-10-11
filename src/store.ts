@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { LoadedImage } from './core/image';
 import { emptyHistory, push, undo, redo, commit, active, latest, type History, type Op } from './core/history';
-import { identityGeometry, type Geometry } from './core/geometry';
 import type { Face } from './core/faces';
 
 export type Tool = 'crop' | 'faces';
@@ -45,11 +44,5 @@ export const useStore = create<State>((set) => ({
   redo: () => set((s) => ({ history: redo(s.history) })),
 }));
 
-export const geometryOf = (h: History): Geometry => (latest(h, 'geometry')?.params as Geometry | undefined) ?? identityGeometry();
-import type { LightParams } from './gl/renderer';
-import { defaultsOf } from './core/settings';
-export const lightOf = (h: History): LightParams => ({ ...(defaultsOf('light') as unknown as LightParams), ...((latest(h, 'light')?.params as Partial<LightParams> | undefined) ?? {}) });
-export interface SmoothOp { strength: number; keep: number; face: number | null }
-export const smoothOf = (h: History): SmoothOp => ({ ...(defaultsOf('smooth') as unknown as SmoothOp), strength: 0, face: null, ...((latest(h, 'smooth')?.params as Partial<SmoothOp> | undefined) ?? {}) });
-export const isLightIdentity = (l: LightParams) => l.exposure === 0 && l.contrast === 0 && l.warmth === 0 && l.saturation === 0;
+export { geometryOf, lightOf, smoothOf, isLightIdentity, type SmoothOp } from './core/edit';
 export const activeOps = (h: History) => active(h);

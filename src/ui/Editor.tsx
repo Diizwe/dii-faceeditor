@@ -4,8 +4,9 @@ import { LightPanel } from './LightPanel';
 import { SmoothPanel } from './SmoothPanel';
 import { rasterMask } from '../core/facemask';
 import { skinStats } from '../core/skin';
+import { detectFaces } from '../core/faces';
 import { invert, apply } from '../core/geometry';
-import { Renderer, type View, type SmoothParams } from '../gl/renderer';
+import { Renderer, type View, type SmoothParams, type FaceMask } from '../gl/renderer';
 import { outToSource, outputSize, type Geometry } from '../core/geometry';
 import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
@@ -31,6 +32,7 @@ export function Editor() {
   const fitted = useRef('');
   const [size, setSize] = useState({ w: 1, h: 1 });
   const splitRef = useRef(-1);
+  const compareRef = useRef(false); compareRef.current = compare; // compare only switches what is presented, so it is instant
   const sizeRef = useRef(size); sizeRef.current = size;
   const [fail, setFail] = useState<string | null>(null);
 
@@ -40,27 +42,29 @@ export function Editor() {
   const sm = smoothOf(history);
   const maskCache = useRef<{ key: string; canvas: OffscreenCanvas | HTMLCanvasElement } | null>(null);
   const skinCache = useRef(new Map<number, { cb: number; cr: number; tol: number }>());
-  const showLight = !compare && !isLightIdentity(light);
+  const showLight = !isLightIdentity(light);
   const k = image.previewScale;
   splitRef.current = split ? (splitRef.current >= 0 ? splitRef.current : size.w / 2) : -1;
-  const smoothFace = !compare && sm.strength > 0 ? (faces?.find((f) => f.id === (sm.face ?? activeFace)) ?? null) : null;
+  // the picked face drives both Smooth and the skin protection in Light & colour
+  const maskFace = sm.strength > 0 || !isLightIdentity(light) ? (faces?.find((f) => f.id === (sm.strength > 0 ? (sm.face ?? activeFace) : activeFace)) ?? null) : null;
   const work = useMemo(() => {
     const [ow, oh] = outputSize(g, image.width, image.height);
     const w = Math.max(1, Math.round(ow * k)), h = Math.max(1, Math.round(oh * k));
     const m = outToSource(g, image.width, image.height, w / k, h / k);
     // source px -> preview px
     const mm = [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number];
-    let smooth: SmoothParams | null = null;
-    if (smoothFace && smoothFace.mesh.length >= 468) {
-      const inv = invert(mm), key = `${smoothFace.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}`;
-      if (maskCache.current?.key !== key) maskCache.current = { key, canvas: rasterMask(smoothFace.mesh as [number, number, number][], w, h, (x, y) => apply(inv, x, y)) };
-      let st = skinCache.current.get(smoothFace.id);
-      if (!st) { st = skinStats(image.preview, smoothFace.mesh as [number, number, number][], smoothFace.box[2]); skinCache.current.set(smoothFace.id, st); }
+    let face: FaceMask | null = null;
+    if (maskFace && maskFace.mesh.length >= 468) {
+      const inv = invert(mm), key = `${maskFace.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}`;
+      if (maskCache.current?.key !== key) maskCache.current = { key, canvas: rasterMask(maskFace.mesh as [number, number, number][], w, h, (x, y) => apply(inv, x, y)) };
+      let st = skinCache.current.get(maskFace.id);
+      if (!st) { st = skinStats(image.preview, maskFace.mesh as [number, number, number][], maskFace.box[2]); skinCache.current.set(maskFace.id, st); }
       const scale = Math.sqrt(Math.abs(inv[0] * inv[4] - inv[1] * inv[3]));
-      smooth = { strength: sm.strength, keep: sm.keep, mask: maskCache.current.canvas, maskKey: key, fw: smoothFace.box[2] * scale, skin: st };
+      face = { mask: maskCache.current.canvas, maskKey: key, fw: maskFace.box[2] * scale, skin: st };
     }
-    return { w, h, light: showLight ? light : null, smooth, m: mm };
-  }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation, smoothFace, sm.strength, sm.keep]);
+    const smooth: SmoothParams | null = face && sm.strength > 0 ? { strength: sm.strength, keep: sm.keep } : null;
+    return { w, h, light: showLight ? light : null, smooth, face, m: mm };
+  }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation, maskFace, sm.strength, sm.keep]);
 
   const facesRef = useRef({ faces, activeFace, m: work.m, w: work.w, h: work.h });
   facesRef.current = { faces, activeFace, m: work.m, w: work.w, h: work.h };
@@ -71,6 +75,19 @@ export function Editor() {
       r.setSource(image.preview); rend.current = r; window.__dii = { renderer: r, renders: 0, redraw: () => draw() };
     } catch (e) { setFail(e instanceof Error ? e.message : 'WebGL2 is unavailable.'); }
     return () => { rend.current?.dispose(); rend.current = null; };
+  }, [image]);
+
+  // find faces once per photo, in the background: Smooth, Light & colour (skin protection) and the picker all use them
+  useEffect(() => {
+    if (useStore.getState().faces) return;
+    let cancelled = false;
+    const st = useStore.getState();
+    st.setBusy('Finding faces…');
+    detectFaces(image.preview, (m) => useStore.getState().setBusy(m))
+      .then((f) => { if (!cancelled) useStore.getState().setFaces(f); })
+      .catch(() => { if (!cancelled) { useStore.getState().setError('Face tools are unavailable: the face models could not be loaded.'); useStore.getState().setFaces([]); } })
+      .finally(() => useStore.getState().setBusy(null));
+    return () => { cancelled = true; };
   }, [image]);
 
   useEffect(() => {
@@ -84,7 +101,7 @@ export function Editor() {
     const r = rend.current; if (!r) return;
     const cs = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0F1013';
     const n = parseInt(cs.replace('#', ''), 16);
-    r.present(view.current, sizeRef.current.w, sizeRef.current.h, window.devicePixelRatio || 1, [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255], splitRef.current >= 0 ? splitRef.current : -1);
+    r.present(view.current, sizeRef.current.w, sizeRef.current.h, window.devicePixelRatio || 1, [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255], splitRef.current >= 0 ? splitRef.current : -1, compareRef.current);
     drawOverlay();
     if (window.__dii) window.__dii.renders++;
   };
@@ -134,7 +151,7 @@ export function Editor() {
   }, [work, size, image]);
 
   useEffect(() => { drawOverlay(); }, [faces, activeFace, panel]);
-  useEffect(() => { draw(); }, [split]);
+  useEffect(() => { draw(); }, [split, compare]);
 
   // zoom / pan: wheel, one-pointer drag, two-pointer pinch
   useEffect(() => {

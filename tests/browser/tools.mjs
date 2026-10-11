@@ -96,19 +96,16 @@ if (!only || only === 'light') {
   const hue = {};
   for (const p of manifest) {
     const r = await page.evaluate(async (file) => {
-      await window.T.load(file);
-      const t = window.__diiTest; const img = t.store.getState().image;
-      const faces = await t.detectFaces(img.preview); if (!faces.length) return null;
-      const f = faces.sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3])[0];
+      const f = await window.H.setFace(file); if (!f) return null;
       const base = await window.H.frame(file, null);
-      const disk = (idx) => { const [cx, cy] = f.mesh[idx]; const rr = Math.max(3, f.box[2] * 0.04); const px = []; for (let y = Math.floor(cy - rr); y <= cy + rr; y++) for (let x = Math.floor(cx - rr); x <= cx + rr; x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= rr * rr && x >= 0 && y >= 0 && x < base.w && y < base.h) px.push([x, y]); return px; };
-      // cheeks (left 205, right 425) and forehead-ish mid cheek (50 / 280) as skin samples
-      const pts = [...disk(205), ...disk(425), ...disk(50), ...disk(280)];
-      const meanHue = (fr) => { let sx = 0, sy = 0; for (const [x, y] of pts) { const i = (y * fr.w + x) * 4; const h = window.H.hue(fr.data[i], fr.data[i + 1], fr.data[i + 2]) * Math.PI / 180; sx += Math.cos(h); sy += Math.sin(h); } return Math.atan2(sy, sx) * 180 / Math.PI; };
-      const h0 = meanHue(base); let worst = 0; window.__dbg = { n: pts.length, h0, sample: Array.from(base.data.slice(((base.h - 1 - pts[0][1]) * base.w + pts[0][0]) * 4, ((base.h - 1 - pts[0][1]) * base.w + pts[0][0]) * 4 + 4)), p0: pts[0], w: base.w, h: base.h, unflipped: Array.from(base.data.slice((pts[0][1] * base.w + pts[0][0]) * 4, (pts[0][1] * base.w + pts[0][0]) * 4 + 4)), nz: base.data.reduce((a, v) => a + (v > 0 ? 1 : 0), 0) / base.data.length };
+      // skin-mask pixels: interior of the feathered face mask (built by the first light frame below)
+      await window.H.frame(file, { exposure: 0, contrast: 0, warmth: 10, saturation: 0 });
+      const mk = window.__dii.renderer.readMask(); const pts = [];
+      for (let y = 0; y < mk.h; y += 3) for (let x = 0; x < mk.w; x += 3) if (mk.data[(y * mk.w + x) * 4] >= 0.99) pts.push([x, y]);
+      const idxs = pts.map(([x, y]) => y * base.w + x); let worst = 0; window.__dbg = { n: pts.length };
       for (const L of [{ warmth: 50 }, { warmth: -50 }, { saturation: 50 }, { saturation: -50 }]) {
         const fr = await window.H.frame(file, { exposure: 0, contrast: 0, warmth: 0, saturation: 0, ...L });
-        let d = meanHue(fr) - h0; d = ((d + 540) % 360) - 180; worst = Math.max(worst, Math.abs(d)); (window.__dbg.per ??= []).push([JSON.stringify(L), +d.toFixed(2)]);
+        const d = window.H.hueShift(base, fr, idxs); worst = Math.max(worst, d); (window.__dbg.per ??= []).push([JSON.stringify(L), +d.toFixed(2)]);
       }
       return worst;
     }, p.file);
@@ -148,10 +145,9 @@ if (!only || only === 'smooth') {
       const vb = window.H.lapVar(yb, w, h, skin), vd = window.H.lapVar(yd, w, h, skin), vm = window.H.lapVar(ym, w, h, skin);
       const sc = f.box[2] / 600; const bp = (y) => { const a = window.H.gauss(y, w, h, 2 * sc), b = window.H.gauss(y, w, h, 6 * sc); let e = 0, n = 0; for (let i = 0; i < N; i++) if (skin[i]) { const d = a[i] - b[i]; e += d * d; n++; } return e / n; };
       const eb = bp(yb), em = bp(ym);
-      const hueMean = (fr) => { let sx = 0, sy = 0; for (let i = 0; i < N; i += 3) if (skin[i]) { const hh = window.H.hue(fr.data[i * 4], fr.data[i * 4 + 1], fr.data[i * 4 + 2]) * Math.PI / 180; sx += Math.cos(hh); sy += Math.sin(hh); } return Math.atan2(sy, sx) * 180 / Math.PI; };
-      let dh = hueMean(def) - hueMean(base); dh = ((dh + 540) % 360) - 180;
+      const skinIdx = []; for (let i = 0; i < N; i += 3) if (skin[i]) skinIdx.push(i); const dh = window.H.hueShift(base, def, skinIdx);
       let clip = 0; for (let i = 0; i < N * 4; i += 4) for (let c = 0; c < 3; c++) { const o = base.data[i + c], v = def.data[i + c]; if ((v <= 0 && o > 0) || (v >= 1 && o < 1)) clip++; }
-      return { skinPx: skin.reduce((a, v) => a + v, 0), outside, ring: ringN ? ringSum / ringN : 0, over, ret_def: vd / vb, ret_max: vm / vb, blem: 1 - em / eb, hue: Math.abs(dh), clip: clip / (N * 3) };
+      return { skinPx: skin.reduce((a, v) => a + v, 0), outside, ring: ringN ? ringSum / ringN : 0, over, ret_def: vd / vb, ret_max: vm / vb, blem: 1 - em / eb, hue: dh, clip: clip / (N * 3) };
     }, p.file);
     if (r.miss) { console.log('no face', p.id); continue; }
     (groupRes[groupOf[p.id]] ??= []).push({ id: p.id, ...r });
@@ -178,6 +174,32 @@ if (!only || only === 'smooth') {
     const gm = Object.entries(groupRes).map(([g, arr]) => [g, mean(arr.map((x) => x[key]))]); const sorted = gm.map((x) => x[1]).sort((a, b) => a - b); const med = sorted[Math.floor(sorted.length / 2)];
     const worst = gm.reduce((w, [g, v]) => (Math.abs(v - med) / Math.abs(med) > w[1] ? [g, Math.abs(v - med) / Math.abs(med)] : w), ['', 0]);
     check(`parity ${name}`, worst[1], worst[1] <= T.evaluation.parity_relative_max, { worst_group: worst[0], median: med });
+  }
+}
+
+if (!only || only === 'parity') {
+  const files = (process.env.PARITY_FILES || 'photos/p05.jpg,photos/p21.jpg,photos/p28.jpg').split(',');
+  const cases = {
+    smooth: [{ tool: 'smooth', params: { strength: 60, keep: 70, face: null } }],
+    light: [{ tool: 'light', params: { exposure: 0.4, contrast: 25, warmth: 30, saturation: 20 } }],
+    combo: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 6, aspect: 0.8 } }, { tool: 'smooth', params: { strength: 40, keep: 70, face: null } }, { tool: 'light', params: { exposure: -0.2, contrast: 10, warmth: -20, saturation: 10 } }],
+  };
+  const M = T.metrics;
+  for (const [name, ops] of Object.entries(cases)) {
+    const rows = [];
+    for (const file of files) {
+      const r = await page.evaluate(async ({ file, ops }) => {
+        await window.H.setFace(file); const st = window.__diiTest.store.getState();
+        const o = ops.map((op) => (op.tool === 'smooth' ? { ...op, params: { ...op.params, face: st.activeFace } } : op));
+        const geo = (o.find((x) => x.tool === 'geometry') || { params: { rot90: 0, flipH: false, flipV: false, angle: 0, aspect: null } }).params;
+        return window.H.parity(geo, o);
+      }, { file, ops });
+      rows.push(r); if (process.env.DBG) console.log(name, file, JSON.stringify(r));
+    }
+    const worst = (k, f) => f(...rows.map((x) => x[k]));
+    check(`M_preview_vs_export_mean_abs_levels ${name}`, worst('mean', Math.max), worst('mean', Math.max) <= M.M_preview_vs_export_mean_abs_levels.max);
+    check(`M_preview_vs_export_p99_levels ${name}`, worst('p99', Math.max), worst('p99', Math.max) <= M.M_preview_vs_export_p99_levels.max);
+    check(`M_preview_vs_export_ssim ${name}`, worst('ssim', Math.min), worst('ssim', Math.min) >= M.M_preview_vs_export_ssim.min, { tiles: rows[0].tiles });
   }
 }
 

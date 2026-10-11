@@ -10,5 +10,6 @@ import { useStore } from './store';
 import { exportImage } from './core/export';
 import { detectFaces } from './core/faces';
 import { loadImage } from './core/image';
+import { editFrom } from './core/edit';
 import { sourceToOut, outputSize, apply } from './core/geometry';
-(window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage, detectFaces, loadImage, sourceToOut, outputSize, apply };
+(window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage, detectFaces, loadImage, editFrom, sourceToOut, outputSize, apply };
