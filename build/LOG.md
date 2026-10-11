@@ -1,6 +1,6 @@
 # Build log
 
-Running totals (updated each run): runs used 1 of 50 · infrastructure spend $0 · licences $0 · Claude subscription: logged by Dii.
+Running totals (updated each run): runs used 2 of 50 · infrastructure spend $0 · licences $0 · Claude subscription: logged by Dii.
 
 ## Run 1: Phase 0 (2026-10-11)
 
