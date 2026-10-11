@@ -20,3 +20,9 @@ Running totals (updated each run): runs used 1 of 50 · infrastructure spend $0 
 - Per-pass software-GPU time budget deliberately left to be measured in Phase 1, then frozen at 1.5x; logged here as a deliberate deferral.
 
 **Broke / open:** none open.
+
+### Run 1, later in the run: test photos, gate
+- Sourcing: Wikimedia Commons crawl (CC0 / CC BY / public domain, NC/SA/ND excluded, >=1000 px short side, >=2005 when dated). Commons rate-limits hard: API 429s with Retry-After, originals 10 min. Dead ends: first crawl crashed (URI too long, fixed with smaller batches); thumbnails need standard widths (330 px, not 320); one `pkill -f` killed my own shell. Visual triage on contact sheets of 100 thumbnails; skin-tone groups are approximate visual estimates.
+- Result: 33 photos, groups 6/8/8/5/6, minimum coverage met, gaps logged in `testdata/COVERAGE.md` (group shots 1/3, low light thin, 48 MP original pending).
+- Phase 0 gate: reviewer agent (same model, fresh context) found 13 defects (missing metrics for Before/after, export ICC/dimensions, third-party requests, model cache; unfrozen runtime budget; defaults over the 40% cap; vacuous halo metric). All applied before freezing; logged in the thresholds changelog.
+- Phase 0 used 1 run, within the plan's 1-2 estimate. Phase 0 done.

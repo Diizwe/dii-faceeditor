@@ -1,18 +1,18 @@
 {
   "project": "Dii-faceeditor",
   "plan": "https://claude.ai/code/artifact/9e2812ba-9fa9-415f-8873-82d2c37e19f8",
-  "phase": 0,
+  "phase": 1,
   "run_count": 1,
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "interactive session_01Vcwbwc1eboVs8Wz34N2j5Q (run 1)",
-    "acquired_at": "2026-10-11T18:06:41Z",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
-    "0": "in_progress",
-    "1": "pending",
+    "0": "done",
+    "1": "in_progress",
     "2": "pending",
     "3": "pending",
     "4": "pending",
@@ -57,12 +57,47 @@
     },
     {
       "id": "0.8",
-      "title": "Fetch 54MP original (stress48) once Commons Retry-After lapses; store at testdata/stress/stress48.jpg",
+      "title": "Fetch 54MP original (stress48) once Commons Retry-After lapses; store at testdata/stress/stress48.jpg [Commons returns 429 with Retry-After 600 on originals; after repeated attempts still throttled at 19:06Z. Wait >= 1 hour with NO requests, then try once. Phase 1 may proceed with a synthetic 48 MP buffer for texture/memory plumbing and must use the real file for the Phase 1 gate.]",
       "status": "todo"
     },
     {
       "id": "0.9",
       "title": "Phase 0 gate: reviewer agent checks spec/thresholds/rubrics vs plan; then FYI notification and move to Phase 1",
+      "status": "done: reviewer agent found 13 defects; all applied pre-freeze (see spec/thresholds.json changelog)"
+    },
+    {
+      "id": "1.1",
+      "title": "Vite + React + TS app skeleton, Zustand store, tokens.css, CI test job (vitest + playwright-core on sparticuz chromium)",
+      "status": "todo"
+    },
+    {
+      "id": "1.2",
+      "title": "Image input: decode, EXIF orientation, HEIC lazy path, 12MP + stress load",
+      "status": "todo"
+    },
+    {
+      "id": "1.3",
+      "title": "WebGL2 renderer + operation-list model, undo/redo, zoom/pan canvas",
+      "status": "todo"
+    },
+    {
+      "id": "1.4",
+      "title": "Crop & rotate",
+      "status": "todo"
+    },
+    {
+      "id": "1.5",
+      "title": "Face picker: BlazeFace + facemesh + iris from @vladmandic/human-models, served from own origin",
+      "status": "todo"
+    },
+    {
+      "id": "1.6",
+      "title": "Colour-managed tiled export, custom JPEG writer with P3 profile and no GPS; M_color_roundtrip + tile seam checks",
+      "status": "todo"
+    },
+    {
+      "id": "1.7",
+      "title": "Measure per-pass software-GPU time; record against 250 ms frozen budget",
       "status": "todo"
     }
   ],
@@ -73,7 +108,8 @@
     "Pages live at https://diizwe.github.io/dii-faceeditor/ (verified 2026-10-11).",
     "Scheduled runs have NO connectors (no GitHub MCP, no Docs): read build/PLAN.md, use git over the proxy, check deploys by curling the live URL.",
     "Plan snapshot is build/PLAN.md; the first ~6k chars (overview/tool table/stack) were extracted from XML; verify against the live doc only if connectors are available.",
-    "Env finding 2026-10-11: huggingface.co, cdn.jsdelivr.net, upload.wikimedia.org, raw.githubusercontent.com (any repo, any sha) and data.jsdelivr.com are reachable from the build workspace, contrary to the earlier probe. api.github.com/codeload for non-attached repos are blocked. App still uses only npm packages + from-scratch code; this only widens where test photos and skills can be sourced."
+    "Env finding 2026-10-11: huggingface.co, cdn.jsdelivr.net, upload.wikimedia.org, raw.githubusercontent.com (any repo, any sha) and data.jsdelivr.com are reachable from the build workspace, contrary to the earlier probe. api.github.com/codeload for non-attached repos are blocked. App still uses only npm packages + from-scratch code; this only widens where test photos and skills can be sourced.",
+    "Run 1 ended at the Phase 0 gate (2026-10-11 ~19:10Z). Next scheduled run starts Phase 1."
   ],
   "trigger_id": "trig_01PHSqXnvQhVJjwyTU7WHcgQ"
 }
