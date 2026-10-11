@@ -12,6 +12,8 @@ interface State {
   error: string | null;
   busy: string | null;
   compare: boolean;
+  healPct: number; // heal brush radius, % of the short side
+  setHealPct(v: number): void;
   split: boolean; // drag-split compare mode
   setSplit(v: boolean): void;
   faces: Face[] | null; // null = not detected yet
@@ -30,7 +32,7 @@ interface State {
 }
 
 export const useStore = create<State>((set) => ({
-  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, split: false, setSplit: (split) => set({ split }), faces: null, activeFace: null,
+  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, healPct: 2, setHealPct: (healPct) => set({ healPct }), split: false, setSplit: (split) => set({ split }), faces: null, activeFace: null,
   setFaces: (faces) => set({ faces, activeFace: faces && faces.length === 1 ? faces[0].id : null }),
   setActiveFace: (activeFace) => set({ activeFace }),
   setImage: (image) => set({ image, history: emptyHistory(), error: null, faces: null, activeFace: null }),

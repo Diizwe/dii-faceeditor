@@ -21,5 +21,5 @@ export function skinStats(preview: ImageBitmap, mesh: Pt[], fw: number): { cb: n
   if (!n) return { cb: -0.05, cr: 0.08, tol: 0.1 };
   const mb = sb / n, mr = sr / n;
   const sd = Math.sqrt(Math.max(0, (sb2 / n - mb * mb) + (sr2 / n - mr * mr)));
-  return { cb: mb, cr: mr, tol: Math.max(0.05, Math.min(0.2, 3 * sd + 0.03)) };
+  return { cb: mb, cr: mr, tol: Math.max(0.08, Math.min(0.2, 3 * sd + 0.04)) };
 }

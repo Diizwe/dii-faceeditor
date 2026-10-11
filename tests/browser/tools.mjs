@@ -203,6 +203,49 @@ if (!only || only === 'parity') {
   }
 }
 
+if (!only || only === 'heal') {
+  const M = T.metrics; const rowsAll = {};
+  for (const p of manifest) {
+    const r = await page.evaluate(async (file) => {
+      const t = window.__diiTest; const W = await window.H.withBlemish(file); if (!W) return null;
+      const st = t.store.getState(), img = st.image; const k = img.previewScale; const rad = 0.02 * Math.min(img.width, img.height);
+      t.store.setState({ history: { ops: [], ptr: 0, open: null } });
+      const frame = async () => { await new Promise((r) => setTimeout(r, 500)); return window.__dii.renderer.readOutHalf(); };
+      const before = await frame();
+      const tap = { pts: [{ x: W.spot[0], y: W.spot[1] }], r: rad };
+      t.store.getState().edit({ tool: 'heal', params: tap });
+      let after = null; for (let i = 0; i < 40; i++) { after = await frame(); let diff = 0; for (let j = 0; j < after.data.length; j += 4 * 11) diff += Math.abs(after.data[j] - before.data[j]); if (diff > 0) break; }
+      const w = before.w, h = before.h;
+      const lum = (f, i) => 255 * (0.2126 * f.data[i * 4] + 0.7152 * f.data[i * 4 + 1] + 0.0722 * f.data[i * 4 + 2]);
+      const [cx, cy] = W.spot, R = rad * 1.25; const rr = (x, y) => Math.hypot(x - cx, y - cy);
+      let outside = 0; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (rr(x, y) > R + 1.5) { const i = y * w + x; for (let c = 0; c < 3; c++) if (Math.abs(after.data[i * 4 + c] - before.data[i * 4 + c]) * 255 > 1) { outside++; break; } }
+      const stat = (sel) => { let s = 0, s2 = 0, n = 0; for (let y = Math.max(0, Math.floor(cy - 2.5 * rad)); y < Math.min(h, cy + 2.5 * rad); y++) for (let x = Math.max(0, Math.floor(cx - 2.5 * rad)); x < Math.min(w, cx + 2.5 * rad); x++) if (sel(rr(x, y))) { const v = lum(after, y * w + x); s += v; s2 += v * v; n++; } const m = s / n; return Math.sqrt(Math.max(0, s2 / n - m * m)); };
+      const stdIn = stat((d) => d <= rad), stdRing = stat((d) => d > rad && d <= 1.5 * rad);
+      const grad = (sel) => { let s = 0, n = 0; for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { if (Math.abs(y - cy) > 2.5 * rad || Math.abs(x - cx) > 2.5 * rad || !sel(rr(x, y))) continue; const i = y * w + x; s += Math.hypot(lum(after, i + 1) - lum(after, i - 1), lum(after, i + w) - lum(after, i - w)) / 2; n++; } return n ? s / n : 0; };
+      const seam = grad((d) => Math.abs(d - R) <= 1.5) / Math.max(1e-6, grad((d) => d > R + 2 && d <= 1.5 * R + 2));
+      // blemish removal: error in the brush circle vs the clean original (loaded from the unpainted photo)
+      const clean = await (async () => { const blob = await (await fetch('/testdata/' + file)).blob(); const bm = await createImageBitmap(blob, { imageOrientation: 'from-image', colorSpaceConversion: 'none' }); const c = new OffscreenCanvas(w, h); const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bm, 0, 0, w, h); return g.getImageData(0, 0, w, h).data; })();
+      let eb = 0, ea = 0, n = 0; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (rr(x, y) <= W.R * 1.2) { const i = y * w + x; for (let c = 0; c < 3; c++) { eb += Math.abs(before.data[i * 4 + c] * 255 - clean[i * 4 + c]); ea += Math.abs(after.data[i * 4 + c] * 255 - clean[i * 4 + c]); } n++; }
+      // determinism: second run from the same state
+      t.store.setState({ history: { ops: [], ptr: 0, open: null } }); await frame();
+      t.store.getState().edit({ tool: 'heal', params: tap });
+      let after2 = null; for (let i = 0; i < 40; i++) { after2 = await frame(); let diff = 0; for (let j = 0; j < after2.data.length; j += 4 * 11) diff += Math.abs(after2.data[j] - before.data[j]); if (diff > 0) break; }
+      let det = 0; for (let i = 0; i < after.data.length; i++) if (after.data[i] !== after2.data[i]) det++;
+      return { outside, stdRatio: stdIn / stdRing, seam, residual: n ? ea / Math.max(1e-6, eb) : 0, det, changed: eb > 0 };
+    }, p.file);
+    if (!r) continue;
+    (rowsAll[groupOf[p.id]] ??= []).push({ id: p.id, ...r }); if (process.env.DBG) console.log(p.id, JSON.stringify(r));
+  }
+  for (const [g, rows] of Object.entries(rowsAll)) {
+    const mx = (k) => Math.max(...rows.map((x) => x[k]));
+    check(`M_outside_mask_changed_px heal MST ${g}`, mx('outside'), mx('outside') <= M.M_outside_mask_changed_px.max, { n: rows.length });
+    check(`M_heal_interior_std_ratio MST ${g}`, mx('stdRatio'), mx('stdRatio') <= M.M_heal_interior_std_ratio.max);
+    check(`M_heal_seam_gradient_ratio MST ${g}`, mx('seam'), mx('seam') <= M.M_heal_seam_gradient_ratio.max);
+    check(`M_deterministic_diff_levels heal MST ${g}`, mx('det'), mx('det') <= M.M_deterministic_diff_levels.max);
+    check(`heal_removes_blemish (residual error / original error) MST ${g}`, mx('residual'), mx('residual') <= 0.5);
+  }
+}
+
 check('no_page_errors', errs.slice(0, 3), errs.length === 0);
 await browser.close(); server.close();
 fs.writeFileSync('/tmp/tools-report.json', JSON.stringify(results, null, 1));

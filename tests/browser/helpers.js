@@ -54,3 +54,25 @@ window.H.parity = async (geometry, ops) => {
   const sorted = Float32Array.from(d).sort(); 
   return { mean: sum / (N * 3), p99: sorted[Math.floor(N * 0.99)], max: sorted[N - 1], ssim: window.H.ssim(yp, ye, pv.w, pv.h), size: [res.width, res.height, pv.w, pv.h], tiles: res.tiles };
 };
+
+// Paint a synthetic blemish (soft dark-red spot) on a skin pixel of the photo and reload the result as a lossless image.
+window.H.withBlemish = async (file) => {
+  const t = window.__diiTest; const blob = await (await fetch('/testdata/' + file)).blob();
+  const img0 = await t.loadImage(blob, file); t.store.getState().setImage(img0);
+  const faces = await window.H.waitFaces(); if (!faces.length) return null;
+  const f = [...faces].sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3])[0];
+  const mk = (() => { return null; })();
+  const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image', colorSpaceConversion: 'none' });
+  const c = new OffscreenCanvas(bmp.width, bmp.height), g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+  const [cx, cy] = f.mesh[205]; const R = Math.max(4, f.box[2] * 0.03);
+  const im = g.getImageData(0, 0, c.width, c.height);
+  for (let y = Math.floor(cy - R * 2); y <= cy + R * 2; y++) for (let x = Math.floor(cx - R * 2); x <= cx + R * 2; x++) {
+    const d = Math.hypot(x - cx, y - cy) / R; if (d >= 1 || x < 0 || y < 0 || x >= c.width || y >= c.height) continue;
+    const a = (1 - d) ** 1.5 * 0.75, o = (y * c.width + x) * 4; im.data[o] = im.data[o] * (1 - a) + 120 * a; im.data[o + 1] = im.data[o + 1] * (1 - a) + 30 * a; im.data[o + 2] = im.data[o + 2] * (1 - a) + 35 * a;
+  }
+  g.putImageData(im, 0, 0);
+  const blob2 = await c.convertToBlob({ type: 'image/png' });
+  const img = await t.loadImage(blob2, file + '#blemish'); t.store.getState().setImage(img);
+  await window.H.waitFaces();
+  return { spot: [cx, cy], R, fw: f.box[2], w: c.width, h: c.height, blemished: im };
+};

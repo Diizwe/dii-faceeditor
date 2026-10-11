@@ -101,9 +101,13 @@ void main(){
   if (m <= 0.0) { o = vec4(c, 1.0); return; }
   float cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b, cr = 0.5*c.r - 0.418688*c.g - 0.081312*c.b;
   float d = length(vec2(cb - uP.z, cr - uP.w)) / uTol;
-  float skin = 1.0 - smoothstep(1.0, 2.2, d);
+  float skin = 1.0 - smoothstep(1.4, 3.0, d);
   float w = clamp(m, 0.0, 1.0) * skin * uP.x;
   vec3 sm = texelFetch(uBase, p, 0).rgb + (c - texelFetch(uFine, p, 0).rgb) * uP.y;
+  // never leave the local range of the original (5x5): smoothing may only move a pixel towards its neighbours, so no halo can appear
+  vec3 lo = c, hi = c; ivec2 lim = textureSize(uOrig, 0) - 1;
+  for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) { vec3 n = texelFetch(uOrig, clamp(p + ivec2(i, j), ivec2(0), lim), 0).rgb; lo = min(lo, n); hi = max(hi, n); }
+  sm = clamp(sm, lo, hi);
   o = vec4(clamp(mix(c, sm, w), 0.0, 1.0), 1.0);
 }`;
 
@@ -300,9 +304,9 @@ export class Renderer {
     }
     if (plan.smooth && face && this.maskTex) {
       const sp = plan.smooth;
-      const sigmaS = 0.012 * face.fw, s = sp.strength / 100;
+      const sigmaS = (0.010 + 0.006 * sp.strength / 100) * face.fw, s = sp.strength / 100; // base blur grows with strength
       const t1 = this.temp(0, w, h), t2 = this.temp(1, w, h), t3 = this.temp(2, w, h);
-      this.blur(cur, t2, t1, Math.max(1, sigmaS), 0.04 + 0.12 * s);            // edge-aware base
+      this.blur(cur, t2, t1, Math.max(1, sigmaS), 0.05 + 0.2 * s);            // edge-aware base
       this.blur(cur, t3, t1, Math.max(0.6, 0.0025 * face.fw), 0);             // fine-detail reference
       const dst = next();
       this.pass('smooth', SMOOTH, dst, { uOrig: cur.tex, uBase: t2.tex, uFine: t3.tex, uMask: this.maskTex.tex },

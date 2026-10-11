@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, geometryOf, lightOf, isLightIdentity, smoothOf } from '../store';
 import { LightPanel } from './LightPanel';
 import { SmoothPanel } from './SmoothPanel';
+import { HealPanel } from './HealPanel';
+import { PreviewHealer, healOps } from '../core/healer';
+import { active as activeOps } from '../core/history';
 import { rasterMask } from '../core/facemask';
 import { skinStats } from '../core/skin';
 import { detectFaces } from '../core/faces';
@@ -12,7 +15,7 @@ import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'crop' | 'smooth' | 'light' | 'faces' | 'export';
+type Panel = 'heal' | 'crop' | 'smooth' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -66,6 +69,10 @@ export function Editor() {
     return { w, h, light: showLight ? light : null, smooth, face, m: mm };
   }, [g, image, k, showLight, light.exposure, light.contrast, light.warmth, light.saturation, maskFace, sm.strength, sm.keep]);
 
+  const [srcVersion, setSrcVersion] = useState(0);
+  const healer = useRef<PreviewHealer | null>(null);
+  const healKey = JSON.stringify(healOps(activeOps(history)));
+  const hover = useRef<{ x: number; y: number } | null>(null);
   const facesRef = useRef({ faces, activeFace, m: work.m, w: work.w, h: work.h });
   facesRef.current = { faces, activeFace, m: work.m, w: work.w, h: work.h };
 
@@ -76,6 +83,18 @@ export function Editor() {
     } catch (e) { setFail(e instanceof Error ? e.message : 'WebGL2 is unavailable.'); }
     return () => { rend.current?.dispose(); rend.current = null; };
   }, [image]);
+
+  // heal runs on the original pixels (before crop/rotate), in a worker; the preview texture is swapped when it finishes
+  useEffect(() => {
+    const h = new PreviewHealer(image.preview, image.previewScale, image.colorMode); healer.current = h;
+    return () => { h.dispose(); healer.current = null; };
+  }, [image]);
+  useEffect(() => {
+    const h = healer.current, r = rend.current; if (!h || !r) return;
+    let cancelled = false;
+    h.apply(healOps(activeOps(history))).then((bmp) => { if (cancelled) return; r.setSource(bmp); setSrcVersion((v) => v + 1); }).catch(() => useStore.getState().setError('Heal could not finish. Try a smaller brush.'));
+    return () => { cancelled = true; };
+  }, [healKey, image]);
 
   // find faces once per photo, in the background: Smooth, Light & colour (skin protection) and the picker all use them
   useEffect(() => {
@@ -124,6 +143,13 @@ export function Editor() {
     const { w, h } = sizeRef.current, dpr = window.devicePixelRatio || 1;
     if (o.width !== Math.round(w * dpr) || o.height !== Math.round(h * dpr)) { o.width = Math.round(w * dpr); o.height = Math.round(h * dpr); }
     const c = o.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    if (panelRef.current === 'heal' && hover.current) {
+      const { m } = facesRef.current, v = view.current, sc = Math.sqrt(Math.abs(m[0] * m[4] - m[1] * m[3]));
+      const st = useStore.getState(), rSrc = (st.healPct / 100) * Math.min(st.image!.width, st.image!.height);
+      const rs = ((rSrc * st.image!.previewScale) / sc) * v.zoom;
+      c.beginPath(); c.arc(hover.current.x, hover.current.y, Math.max(3, rs), 0, Math.PI * 2); c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
+      c.beginPath(); c.arc(hover.current.x, hover.current.y, Math.max(3, rs) + 1.5, 0, Math.PI * 2); c.lineWidth = 1; c.strokeStyle = 'rgba(0,0,0,.6)'; c.stroke();
+    }
     const { faces: fs, activeFace: af } = facesRef.current;
     if (!fs || panelRef.current !== 'faces') return;
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#8F7CFF';
@@ -148,7 +174,7 @@ export function Editor() {
       view.current = { zoom: z, panX: (size.w - work.w * z) / 2, panY: (size.h - work.h * z) / 2 };
     }
     draw();
-  }, [work, size, image]);
+  }, [work, size, image, srcVersion]);
 
   useEffect(() => { drawOverlay(); }, [faces, activeFace, panel]);
   useEffect(() => { draw(); }, [split, compare]);
@@ -166,10 +192,15 @@ export function Editor() {
     };
     const onWheel = (e: WheelEvent) => { e.preventDefault(); const b = rect(); zoomAt(e.clientX - b.left, e.clientY - b.top, Math.exp(-e.deltaY * 0.0015)); };
     let down: { x: number; y: number; t: number } | null = null;
-    const onDown = (e: PointerEvent) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); last = null; down = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null; };
+    let stroke: { x: number; y: number }[] | null = null;
+    const toSrc = (cx: number, cy: number) => { const [px, py] = toSource(cx, cy); const k = useStore.getState().image!.previewScale; return { x: px / k, y: py / k }; };
+    const onDown = (e: PointerEvent) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); last = null; down = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+      if (panelRef.current === 'heal') { const b = rect(); if (pts.size === 1) { stroke = [toSrc(e.clientX - b.left, e.clientY - b.top)]; hover.current = { x: e.clientX - b.left, y: e.clientY - b.top }; drawOverlay(); } else stroke = null; } };
     const onMove = (e: PointerEvent) => {
       const p = pts.get(e.pointerId); if (!p) return;
       const b = rect();
+      if (panelRef.current === 'heal') { hover.current = { x: e.clientX - b.left, y: e.clientY - b.top }; drawOverlay(); }
+      if (pts.size === 1 && stroke) { stroke.push(toSrc(e.clientX - b.left, e.clientY - b.top)); p.x = e.clientX; p.y = e.clientY; return; }
       if (pts.size === 1 && splitRef.current >= 0) {
         splitRef.current = Math.min(Math.max(e.clientX - b.left, 0), size.w); p.x = e.clientX; p.y = e.clientY; draw();
       } else if (pts.size === 1) {
@@ -187,6 +218,13 @@ export function Editor() {
       }
     };
     const onUp = (e: PointerEvent) => {
+      if (stroke && stroke.length) {
+        const st = useStore.getState(), img = st.image!, r = (st.healPct / 100) * Math.min(img.width, img.height);
+        // thin a long drag so each op keeps a modest number of points
+        const pts2 = stroke.filter((q, i) => i === 0 || i === stroke!.length - 1 || Math.hypot(q.x - stroke![i - 1].x, q.y - stroke![i - 1].y) > r * 0.25);
+        st.edit({ tool: 'heal', params: { pts: pts2, r } });
+      }
+      stroke = null;
       if (down && pts.size === 1 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 500 && panelRef.current === 'faces') {
         const b = rect(), [px, py] = toSource(e.clientX - b.left, e.clientY - b.top);
         const hit = (facesRef.current.faces ?? []).filter((f) => px >= f.box[0] && px <= f.box[0] + f.box[2] && py >= f.box[1] && py <= f.box[1] + f.box[3]).sort((a, c) => a.box[2] * a.box[3] - c.box[2] * c.box[3])[0];
@@ -212,9 +250,10 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <SmoothPanel /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <SmoothPanel /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
+        <button aria-pressed={panel === 'heal'} onClick={() => setPanel('heal')} data-testid="tool-heal">Heal</button>
         <button aria-pressed={panel === 'crop'} onClick={() => setPanel('crop')} data-testid="tool-crop">Crop &amp; rotate</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>

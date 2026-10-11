@@ -2,6 +2,7 @@
 export interface Control { tool: string; id: string; label: string; min: number; max: number; step: number; default: number; unit?: string; }
 
 export const CONTROLS: Control[] = [
+  { tool: 'heal', id: 'radius', label: 'Brush size', min: 0.5, max: 6, step: 0.1, default: 2, unit: '%' },
   { tool: 'smooth', id: 'strength', label: 'Smoothing', min: 0, max: 100, step: 1, default: 35 },
   { tool: 'smooth', id: 'keep', label: 'Keep fine detail', min: 0, max: 100, step: 1, default: 70 },
   { tool: 'light', id: 'exposure', label: 'Exposure', min: -2, max: 2, step: 0.05, default: 0, unit: 'EV' },

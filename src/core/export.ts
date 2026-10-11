@@ -2,6 +2,7 @@ import { Renderer, type Plan } from '../gl/renderer';
 import { rasterMask } from './facemask';
 import { skinStats } from './skin';
 import type { EditState } from './edit';
+import { buildPatches, applyPatches, type HealOp, type Patch } from './healer';
 import { decodeFull, type LoadedImage } from './image';
 import { outToSource, outputSize, apply, invert, type Affine, type Geometry } from './geometry';
 import { JpegWriter } from './jpeg';
@@ -11,6 +12,7 @@ export interface ExportOptions {
   format: 'jpeg' | 'png';
   quality: number;
   geometry: Geometry;
+  heal?: HealOp[]; // clean-up strokes in source px, applied before everything else
   edit?: EditState; // retouch + colour on top of the geometry; omitted = geometry only
   tile?: number; // output tile edge, default 2048
   maxTextureSize?: number; // enforced limit; iPhone-class default 4096
@@ -37,6 +39,8 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   const margin = 2;
   const skin = E?.face ? skinStats(img.preview, E.face.mesh as [number, number, number][], E.face.box[2]) : null;
   const full = await decodeFull(img);
+  const patches: Patch[] = o.heal?.length ? buildPatches(full, o.heal, img.colorMode) : [];
+  const crop = async (b: { x0: number; y0: number; w: number; h: number }) => applyPatches(await createImageBitmap(full, b.x0, b.y0, Math.max(1, b.w), Math.max(1, b.h), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' }), b.x0, b.y0, patches, img.colorMode);
   try {
     // shrink tile until every tile's source bounding box fits the texture limit
     const bbox = (tx: number, ty: number, tw: number, th: number) => {
@@ -67,19 +71,18 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
         for (let ty = by; ty < by + bh; ty += T) {
           const th = Math.min(T, by + bh - ty);
           const b = bbox(tx, ty, tw, th);
-          const bmp = await createImageBitmap(full, b.x0, b.y0, Math.max(1, b.w), Math.max(1, b.h), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+          const bmp = hasPasses ? null : await crop(b);
           let px: Uint8Array;
           if (!hasPasses) {
             // tile px (u,v) -> output (tx+u, ty+v) -> source -> bbox-local
             const tm: Affine = [m[0], m[1], m[0] * tx + m[1] * ty + m[2] - b.x0, m[3], m[4], m[3] * tx + m[4] * ty + m[5] - b.y0];
-            px = r.renderTilePixels(bmp, tm, tw, th);
+            px = r.renderTilePixels(bmp!, tm, tw, th);
           } else {
             // render an enlarged region (tile + pad on every side that is not an image edge) so blurs see their full support
             const rx0 = Math.max(0, tx - pad), ry0 = Math.max(0, ty - pad), rx1 = Math.min(outW, tx + tw + pad), ry1 = Math.min(outH, ty + th + pad);
             const rw = rx1 - rx0, rh = ry1 - ry0;
             const rb = bbox(rx0, ry0, rw, rh);
-            bmp.close();
-            const bmp2 = await createImageBitmap(full, rb.x0, rb.y0, Math.max(1, rb.w), Math.max(1, rb.h), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+            const bmp2 = await crop(rb);
             const rm: Affine = [m[0], m[1], m[0] * rx0 + m[1] * ry0 + m[2] - rb.x0, m[3], m[4], m[3] * rx0 + m[4] * ry0 + m[5] - rb.y0];
             const plan: Plan = { m: rm, w: rw, h: rh, light: E!.light, smooth: E!.smooth, face: null };
             if (E!.face && skin) {
@@ -94,8 +97,8 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
             tiles++;
             continue;
           }
-          peak = Math.max(peak, bmp.width * bmp.height * 4 + tw * th * 4);
-          bmp.close();
+          peak = Math.max(peak, bmp!.width * bmp!.height * 4 + tw * th * 4);
+          bmp!.close();
           for (let y = 0; y < th; y++) band.set(px.subarray(y * tw * 4, (y + 1) * tw * 4), ((ty - by + y) * outW + tx) * 4);
           tiles++;
         }
