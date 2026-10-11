@@ -33,22 +33,22 @@
     {
       "id": "0.3",
       "title": "Feature spec, UI flow, design tokens",
-      "status": "todo"
+      "status": "done: docs/SPEC.md, docs/DESIGN_TOKENS.md"
     },
     {
       "id": "0.4",
       "title": "Per-tool rubrics, inputs/ranges, 'outside the mask' definitions, frozen thresholds",
-      "status": "todo"
+      "status": "done: spec/thresholds.json (frozen 2026-10-11), docs/RUBRICS.md"
     },
     {
       "id": "0.5",
       "title": "Test-photo grid from CC0/CC BY GitHub-hosted sources; coverage check (min 24 photos, >=3 per skin-tone group)",
-      "status": "todo"
+      "status": "in_progress: crawling Wikimedia Commons (CC0/CC BY/PD only) with rate-limit backoff"
     },
     {
       "id": "0.6",
       "title": "Install agent skills at pinned commits; confirm they run on workspace Chromium",
-      "status": "partial: 20 skills installed in .agent-skills (pinned, swept); Chromium run-check pending"
+      "status": "done: 20 skills pinned in .agent-skills; Remotion renders on workspace Chromium (browserExecutable); playwright-core drives sparticuz chromium"
     },
     {
       "id": "0.7",
