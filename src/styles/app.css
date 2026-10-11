@@ -1,0 +1,27 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 400 16px/1.4 var(--font); overscroll-behavior: none; }
+button { font: inherit; color: inherit; background: var(--surface-2); border: 0; border-radius: var(--r-ctl); min-height: 44px; min-width: 44px; padding: 0 var(--s4); cursor: pointer; transition: background var(--t); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+button.chip { border-radius: var(--r-chip); padding: 0 var(--s3); }
+button[aria-pressed="true"], button.on { outline: 2px solid var(--accent); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.app { display: flex; flex-direction: column; height: 100%; padding-bottom: env(safe-area-inset-bottom); }
+.topbar { display: flex; gap: var(--s2); align-items: center; padding: var(--s2) var(--s3); background: var(--surface); }
+.topbar .spacer { flex: 1; }
+.logo { font-weight: 600; } .logo b { color: var(--accent); }
+.stage { position: relative; flex: 1; min-height: 0; background: var(--bg); touch-action: none; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.panel { background: var(--surface); padding: var(--s3) var(--s4); max-height: 40vh; overflow: auto; }
+.row { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; margin: var(--s2) 0; }
+.row label { min-width: 90px; color: var(--text-dim); font-size: 14px; }
+.row input[type=range] { flex: 1; min-width: 140px; min-height: 44px; accent-color: var(--accent); }
+.toolbar { display: flex; overflow-x: auto; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); min-height: 56px; }
+.toolbar button { flex: none; }
+.start { display: grid; place-items: center; height: 100%; text-align: center; padding: var(--s6); }
+.start p { color: var(--text-dim); max-width: 36ch; margin: var(--s3) auto var(--s6); }
+.start.drag { outline: 2px dashed var(--accent); outline-offset: -12px; }
+.err { color: var(--danger); padding: var(--s2) var(--s4); background: var(--surface); }
+.faces { position: absolute; inset: 0; pointer-events: none; }
+.note { color: var(--text-dim); font-size: 14px; }

@@ -1,0 +1,4 @@
+node_modules
+dist
+.agent-skills/**/node_modules
+*.tsbuildinfo
