@@ -5,23 +5,64 @@
   "run_count": 1,
   "max_runs": 50,
   "runs_without_passing_commit": 0,
-  "lock": { "held_by": null, "acquired_at": null, "expires_after_hours": 4 },
+  "lock": {
+    "held_by": null,
+    "acquired_at": null,
+    "expires_after_hours": 4
+  },
   "phases": {
-    "0": "in_progress", "1": "pending", "2": "pending", "3": "pending",
-    "4": "pending", "5": "pending", "6": "pending"
+    "0": "in_progress",
+    "1": "pending",
+    "2": "pending",
+    "3": "pending",
+    "4": "pending",
+    "5": "pending",
+    "6": "pending"
   },
   "tasks": [
-    { "id": "0.1", "title": "Repo, MIT licence, Pages deploy workflow", "status": "in_progress" },
-    { "id": "0.2", "title": "Re-verify environment facts (npm, GitHub, WebGL2 float targets, blocked hosts)", "status": "todo" },
-    { "id": "0.3", "title": "Feature spec, UI flow, design tokens", "status": "todo" },
-    { "id": "0.4", "title": "Per-tool rubrics, inputs/ranges, 'outside the mask' definitions, frozen thresholds", "status": "todo" },
-    { "id": "0.5", "title": "Test-photo grid from CC0/CC BY GitHub-hosted sources; coverage check (min 24 photos, >=3 per skin-tone group)", "status": "todo" },
-    { "id": "0.6", "title": "Install agent skills at pinned commits; confirm they run on workspace Chromium", "status": "todo" },
-    { "id": "0.7", "title": "Headless WebGL2 shader proof", "status": "todo" }
+    {
+      "id": "0.1",
+      "title": "Repo, MIT licence, Pages deploy workflow",
+      "status": "done"
+    },
+    {
+      "id": "0.2",
+      "title": "Re-verify environment facts (npm, GitHub, WebGL2 float targets, blocked hosts)",
+      "status": "todo"
+    },
+    {
+      "id": "0.3",
+      "title": "Feature spec, UI flow, design tokens",
+      "status": "todo"
+    },
+    {
+      "id": "0.4",
+      "title": "Per-tool rubrics, inputs/ranges, 'outside the mask' definitions, frozen thresholds",
+      "status": "todo"
+    },
+    {
+      "id": "0.5",
+      "title": "Test-photo grid from CC0/CC BY GitHub-hosted sources; coverage check (min 24 photos, >=3 per skin-tone group)",
+      "status": "todo"
+    },
+    {
+      "id": "0.6",
+      "title": "Install agent skills at pinned commits; confirm they run on workspace Chromium",
+      "status": "todo"
+    },
+    {
+      "id": "0.7",
+      "title": "Headless WebGL2 shader proof",
+      "status": "todo"
+    }
   ],
   "open_failures": [],
   "notes": [
     "Repo created by user; Claude GitHub App installed 2026-10-11; push verified.",
-    "Remote branch probe-push is an empty leftover from a push test; proxy refuses branch deletion."
-  ]
+    "Remote branch probe-push is an empty leftover from a push test; proxy refuses branch deletion.",
+    "Pages live at https://diizwe.github.io/dii-faceeditor/ (verified 2026-10-11).",
+    "Scheduled runs have NO connectors (no GitHub MCP, no Docs): read build/PLAN.md, use git over the proxy, check deploys by curling the live URL.",
+    "Plan snapshot is build/PLAN.md; the first ~6k chars (overview/tool table/stack) were extracted from XML; verify against the live doc only if connectors are available."
+  ],
+  "trigger_id": "trig_01PHSqXnvQhVJjwyTU7WHcgQ"
 }
