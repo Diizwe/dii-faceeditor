@@ -7,13 +7,15 @@ import sparticuz from '@sparticuz/chromium';
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.bin': 'application/octet-stream', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
-export function serve(root, { onRequest } = {}) {
+export function serve(root, { onRequest, mounts = {} } = {}) {
   const server = http.createServer((req, res) => {
     onRequest?.(req);
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p.endsWith('/')) p += 'index.html';
-    const f = path.join(root, p);
-    if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('nf'); return; }
+    let base = root, rel = p;
+    for (const [prefix, dir] of Object.entries(mounts)) if (p.startsWith(prefix)) { base = dir; rel = p.slice(prefix.length); }
+    const f = path.join(base, rel);
+    if (!f.startsWith(base) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('nf'); return; }
     res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' });
     fs.createReadStream(f).pipe(res);
   });

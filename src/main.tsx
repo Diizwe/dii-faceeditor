@@ -8,4 +8,5 @@ createRoot(document.getElementById('root')!).render(<App />);
 // Test hook for the browser suite (tests/browser). Exposes no data beyond what the page already holds.
 import { useStore } from './store';
 import { exportImage } from './core/export';
-(window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage };
+import { detectFaces } from './core/faces';
+(window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage, detectFaces };

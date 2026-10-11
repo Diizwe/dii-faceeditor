@@ -3,9 +3,10 @@ import { useStore, geometryOf } from '../store';
 import { Renderer, type View } from '../gl/renderer';
 import { identityGeometry, outToSource, outputSize, type Geometry } from '../core/geometry';
 import { CropPanel } from './CropPanel';
+import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'crop' | 'export';
+type Panel = 'crop' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -14,8 +15,12 @@ export function Editor() {
   const history = useStore((s) => s.history);
   const compare = useStore((s) => s.compare);
   const [panel, setPanel] = useState<Panel>('crop');
+  const panelRef = useRef<Panel>('crop'); panelRef.current = panel;
   const stage = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const overlay = useRef<HTMLCanvasElement>(null);
+  const faces = useStore((s) => s.faces);
+  const activeFace = useStore((s) => s.activeFace);
   const rend = useRef<Renderer | null>(null);
   const view = useRef<View>({ zoom: 1, panX: 0, panY: 0 });
   const fitted = useRef('');
@@ -32,6 +37,9 @@ export function Editor() {
     // source px -> preview px
     return { w, h, m: [m[0] * k, m[1] * k, m[2] * k, m[3] * k, m[4] * k, m[5] * k] as [number, number, number, number, number, number] };
   }, [g, image, k]);
+
+  const facesRef = useRef({ faces, activeFace, m: work.m, w: work.w, h: work.h });
+  facesRef.current = { faces, activeFace, m: work.m, w: work.w, h: work.h };
 
   useEffect(() => {
     try {
@@ -53,7 +61,40 @@ export function Editor() {
     const cs = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0F1013';
     const n = parseInt(cs.replace('#', ''), 16);
     r.present(view.current, sizeRef.current.w, sizeRef.current.h, window.devicePixelRatio || 1, [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]);
+    drawOverlay();
     if (window.__dii) window.__dii.renders++;
+  };
+
+  // preview-source px -> screen css px, through the inverse of the work->source affine and the view
+  const toScreen = (x: number, y: number): [number, number] => {
+    const { m } = facesRef.current, v = view.current;
+    const det = m[0] * m[4] - m[1] * m[3];
+    const dx = x - m[2], dy = y - m[5];
+    const wx = (m[4] * dx - m[1] * dy) / det, wy = (-m[3] * dx + m[0] * dy) / det;
+    return [wx * v.zoom + v.panX, wy * v.zoom + v.panY];
+  };
+  const toSource = (sx: number, sy: number): [number, number] => {
+    const { m } = facesRef.current, v = view.current;
+    const wx = (sx - v.panX) / v.zoom, wy = (sy - v.panY) / v.zoom;
+    return [m[0] * wx + m[1] * wy + m[2], m[3] * wx + m[4] * wy + m[5]];
+  };
+  const drawOverlay = () => {
+    const o = overlay.current; if (!o) return;
+    const { w, h } = sizeRef.current, dpr = window.devicePixelRatio || 1;
+    if (o.width !== Math.round(w * dpr) || o.height !== Math.round(h * dpr)) { o.width = Math.round(w * dpr); o.height = Math.round(h * dpr); }
+    const c = o.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    const { faces: fs, activeFace: af } = facesRef.current;
+    if (!fs || panelRef.current !== 'faces') return;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#8F7CFF';
+    for (const f of fs) {
+      const [bx, by, bw, bh] = f.box, cx = bx + bw / 2, cy = by + bh / 2;
+      c.beginPath();
+      for (let i = 0; i <= 40; i++) { const a = (i / 40) * Math.PI * 2; const [px, py] = toScreen(cx + Math.cos(a) * bw * 0.52, cy + Math.sin(a) * bh * 0.58); i ? c.lineTo(px, py) : c.moveTo(px, py); }
+      c.closePath(); c.lineWidth = f.id === af ? 4 : 2.5; c.strokeStyle = f.id === af ? accent : 'rgba(255,255,255,.85)'; c.stroke();
+      const [lx, ly] = toScreen(bx, by);
+      c.fillStyle = f.id === af ? accent : 'rgba(0,0,0,.65)'; c.beginPath(); c.arc(lx + 14, ly + 14, 13, 0, Math.PI * 2); c.fill();
+      c.fillStyle = f.id === af ? '#0F1013' : '#fff'; c.font = '600 14px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(f.id), lx + 14, ly + 14);
+    }
   };
 
   useEffect(() => {
@@ -68,6 +109,8 @@ export function Editor() {
     draw();
   }, [work, size, image]);
 
+  useEffect(() => { drawOverlay(); }, [faces, activeFace, panel]);
+
   // zoom / pan: wheel, one-pointer drag, two-pointer pinch
   useEffect(() => {
     const el = canvas.current!;
@@ -80,7 +123,8 @@ export function Editor() {
       draw();
     };
     const onWheel = (e: WheelEvent) => { e.preventDefault(); const b = rect(); zoomAt(e.clientX - b.left, e.clientY - b.top, Math.exp(-e.deltaY * 0.0015)); };
-    const onDown = (e: PointerEvent) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); last = null; };
+    let down: { x: number; y: number; t: number } | null = null;
+    const onDown = (e: PointerEvent) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); last = null; down = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null; };
     const onMove = (e: PointerEvent) => {
       const p = pts.get(e.pointerId); if (!p) return;
       const b = rect();
@@ -98,7 +142,14 @@ export function Editor() {
         last = { d, cx, cy };
       }
     };
-    const onUp = (e: PointerEvent) => { pts.delete(e.pointerId); last = null; };
+    const onUp = (e: PointerEvent) => {
+      if (down && pts.size === 1 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 500 && panelRef.current === 'faces') {
+        const b = rect(), [px, py] = toSource(e.clientX - b.left, e.clientY - b.top);
+        const hit = (facesRef.current.faces ?? []).filter((f) => px >= f.box[0] && px <= f.box[0] + f.box[2] && py >= f.box[1] && py <= f.box[1] + f.box[3]).sort((a, c) => a.box[2] * a.box[3] - c.box[2] * c.box[3])[0];
+        if (hit) useStore.getState().setActiveFace(hit.id);
+      }
+      down = null; pts.delete(e.pointerId); last = null;
+    };
     const onDbl = () => { fitted.current = ''; setSize((s) => ({ ...s })); };
     el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('pointerdown', onDown); el.addEventListener('pointermove', onMove);
@@ -113,13 +164,15 @@ export function Editor() {
     <>
       <div className="stage" ref={stage}>
         <canvas ref={canvas} data-testid="canvas" aria-label="Photo preview" />
+        <canvas ref={overlay} className="faces" data-testid="overlay" aria-hidden="true" />
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'crop' ? <CropPanel /> : <ExportPanel />}
+        {panel === 'crop' ? <CropPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'crop'} onClick={() => setPanel('crop')} data-testid="tool-crop">Crop &amp; rotate</button>
+        <button aria-pressed={panel === 'faces'} onClick={() => setPanel('faces')} data-testid="tool-faces">Faces</button>
         <button aria-pressed={panel === 'export'} onClick={() => setPanel('export')} data-testid="tool-export">Export</button>
       </nav>
     </>

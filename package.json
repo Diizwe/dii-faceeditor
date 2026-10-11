@@ -9,9 +9,13 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:browser": "node tests/browser/run.mjs"
+    "test:browser": "node tests/browser/run.mjs && node tests/browser/faces.mjs",
+    "predev": "node scripts/copy-models.mjs",
+    "prebuild": "node scripts/copy-models.mjs"
   },
   "dependencies": {
+    "@vladmandic/human": "^3.3.6",
+    "@vladmandic/human-models": "^3.0.4",
     "libheif-js": "^1.23.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

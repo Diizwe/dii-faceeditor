@@ -17,7 +17,7 @@ const results = []; let failed = false;
 const check = (name, value, ok, extra = {}) => { results.push({ name, value, ok, ...extra }); if (!ok) failed = true; console.log(ok ? 'PASS' : 'FAIL', name, JSON.stringify(value)); };
 
 const origins = new Set();
-const { server, port } = await serve(path.join(root, 'dist'));
+const { server, port } = await serve(path.join(root, 'dist'), { mounts: { '/testdata/': path.join(root, 'testdata') } });
 const base = `http://127.0.0.1:${port}/`;
 const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 428, height: 926 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true,
@@ -142,6 +142,23 @@ if (!only || only === 'stress') {
   check('M_color_roundtrip_deltaE_p999_48mp', res.all_p999, res.all_p999 <= T.metrics.M_color_roundtrip_deltaE_p999.max, { png_seconds: ll.seconds });
 }
 
+// ---- 4b. face picker in the UI: detect, outline drawn, group photo selection by tap
+if (!only || only === 'facesui') {
+  await openFile(path.join(root, 'testdata/photos/p33.jpg'));
+  await page.click('[data-testid=tool-faces]');
+  await page.waitForSelector('[data-testid=face-1]', { timeout: 120000 });
+  const n = await page.evaluate(() => window.__diiTest.store.getState().faces.length);
+  check('faces_ui_found_two_faces', n, n === 2);
+  const drawn = await page.evaluate(() => { const o = document.querySelector('[data-testid=overlay]'); const d = o.getContext('2d').getImageData(0, 0, o.width, o.height).data; let c = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) c++; return c; });
+  check('faces_overlay_drawn', drawn, drawn > 500);
+  await page.click('[data-testid=face-2]');
+  const a = await page.evaluate(() => window.__diiTest.store.getState().activeFace); check('face_selected_by_button', a, a === 2);
+  // tap on the first face on the canvas
+  const pos = await page.evaluate(() => { const s = window.__diiTest.store.getState(); const f = s.faces[0]; const r = window.__dii.renderer; const cv = document.querySelector('[data-testid=canvas]').getBoundingClientRect(); const ws = r.workSize; const view = Math.min(cv.width / ws[0], cv.height / ws[1]) * 0.96; return { x: cv.left + (cv.width - ws[0] * view) / 2 + (f.box[0] + f.box[2] / 2) * (ws[0] / s.image.preview.width) * view, y: cv.top + (cv.height - ws[1] * view) / 2 + (f.box[1] + f.box[3] / 2) * (ws[1] / s.image.preview.height) * view }; });
+  await page.mouse.click(pos.x, pos.y);
+  const a2 = await page.evaluate(() => window.__diiTest.store.getState().activeFace); check('face_selected_by_tap', a2, a2 === 1);
+}
+
 // ---- 5. per-pass GPU time on the software GPU at the 2048 px preview, and third-party requests
 if (!only || only === 'perf') {
   await openFile(path.join(fx, 'f12_p3.jpg'));
@@ -150,6 +167,8 @@ if (!only || only === 'perf') {
 }
 const third = [...origins].filter((o) => o !== new URL(base).origin);
 check('M_third_party_requests', third, third.length === 0);
+const jsKb = (() => { const html = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8'); const m = [...html.matchAll(/src="\.\/(assets\/[^"]+\.js)"/g)].map((x) => x[1]); return m.reduce((n, f) => n + execFileSync('gzip', ['-c', path.join(root, 'dist', f)], { maxBuffer: 1 << 26 }).length, 0) / 1024; })();
+check('M_initial_js_gzip_kb', Math.round(jsKb), jsKb <= T.metrics.M_initial_js_gzip_kb.max, { limit: T.metrics.M_initial_js_gzip_kb.max });
 check('no_console_errors', errors.slice(0, 5), errors.length === 0);
 
 await browser.close(); server.close();

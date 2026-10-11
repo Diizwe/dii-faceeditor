@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { LoadedImage } from './core/image';
 import { emptyHistory, push, undo, redo, commit, active, latest, type History, type Op } from './core/history';
 import { identityGeometry, type Geometry } from './core/geometry';
+import type { Face } from './core/faces';
 
 export type Tool = 'crop' | 'faces';
 
@@ -12,6 +13,10 @@ interface State {
   error: string | null;
   busy: string | null;
   compare: boolean;
+  faces: Face[] | null; // null = not detected yet
+  activeFace: number | null;
+  setFaces(f: Face[] | null): void;
+  setActiveFace(id: number | null): void;
   setImage(i: LoadedImage | null): void;
   setTool(t: Tool): void;
   setError(e: string | null): void;
@@ -24,8 +29,10 @@ interface State {
 }
 
 export const useStore = create<State>((set) => ({
-  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false,
-  setImage: (image) => set({ image, history: emptyHistory(), error: null }),
+  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, faces: null, activeFace: null,
+  setFaces: (faces) => set({ faces, activeFace: faces && faces.length === 1 ? faces[0].id : null }),
+  setActiveFace: (activeFace) => set({ activeFace }),
+  setImage: (image) => set({ image, history: emptyHistory(), error: null, faces: null, activeFace: null }),
   setTool: (tool) => set((s) => ({ tool, history: commit(s.history) })),
   setError: (error) => set({ error }),
   setBusy: (busy) => set({ busy }),

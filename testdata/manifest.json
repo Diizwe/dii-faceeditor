@@ -681,7 +681,7 @@
    "pose": "front",
    "glasses": false,
    "facial_hair": false,
-   "faces": 3,
+   "faces": 2,
    "source": "Wikimedia Commons",
    "title": "File:Dr Tee.jpg",
    "page": "https://commons.wikimedia.org/wiki/File:Dr_Tee.jpg",
@@ -692,7 +692,9 @@
    "orig_h": 1944,
    "stored_long_edge_px": 1280,
    "showcase_ok": false,
-   "showcase_note": "No model release verified; testing only"
+   "showcase_note": "No model release verified; testing only",
+   "truncated_faces": 1,
+   "label_note": "Run 2 relabel: the third person at the left frame edge is cut off with under half the face inside the frame. Truncated faces are excluded from recall labels (standard practice); the detector also finds no face there at minConfidence 0.2."
   }
  ],
  "pending": [

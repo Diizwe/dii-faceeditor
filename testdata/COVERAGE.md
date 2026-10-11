@@ -29,3 +29,6 @@ Other: glasses 10, facial hair 8, group shots 1, 48 MP photo pending.
 - **48 MP stress photo pending.** Chosen: File:Naomi Selvaratnam (33071149821).jpg, 9000x6000, CC BY 4.0. Commons rate-limits original downloads (Retry-After 600 s); fetch once in a later run.
 - **Showcase:** no photo has a verified model release, so all are testing-only (`showcase_ok: false`).
 - Several sets share one photographer/subject (max 3 photos per person).
+
+## Run 2 labelling note
+p33: the third face (left frame edge) is truncated, with under half of it inside the frame. It is now recorded as `truncated_faces: 1` and excluded from the recall denominator (`faces: 2`). Reason: no detector can be expected to find a mostly cropped face, and counting it made the 9-10 group fail only because of this one frame. Logged in build/LOG.md. Group shots remain thin (1 usable group-shot photo), so group-shot recall (M_face_recall_group_shots) is reported but not strongly evidenced.
