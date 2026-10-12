@@ -85,3 +85,6 @@ Running totals (updated each run): runs used 2 of 50 · infrastructure spend $0 
 
 ## Run 5 (2026-10-12 09:20Z)
 Looked at the Light & colour sheets directly: p31 is already a high-key photo and +0.3 EV with stacked warmth/contrast clips it by design; p21 shows a normal warm lift. A stronger highlight shoulder (knee 0.6) breaks the monotone exposure check because any highlight compression lowers mean luma at small positive EV, so the 0.8 knee stays. No code change this run; recorded a decision plan for run 6 (Whiten/Eyes as beta, Smooth parity decision, then Phase 3).
+
+## Run 6 (2026-10-12 09:47Z): Phase 2 closed with exceptions
+Per the plan's rule (a task failing its gate 3 times is cut to its simplest working version or deferred, and logged): Smooth cross-group parity (detail retention at max 22% off, blemish reduction 30% off; per-group absolute checks all pass), Heal near stubble/face edges, Light & colour clipping on already high-key photos, Whiten (under-whitens stained teeth, only 2 usable photos, no MST 1-2 evidence) are shipped as they are and listed as known gaps for the handoff. Whiten and Eyes are labelled "beta" in the UI. Phase 3 starts.

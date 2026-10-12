@@ -2,19 +2,19 @@
   "project": "Dii-faceeditor",
   "plan": "https://claude.ai/code/artifact/9e2812ba-9fa9-415f-8873-82d2c37e19f8",
   "phase": 2,
-  "run_count": 5,
+  "run_count": 6,
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": null,
-    "acquired_at": null,
+    "held_by": "run-6",
+    "acquired_at": "2026-10-12T09:47:26.282235+00:00",
     "expires_after_hours": 4
   },
   "phases": {
     "0": "done",
     "1": "done (0.8 cut to synthetic 48 MP)",
-    "2": "in_progress",
-    "3": "pending",
+    "2": "done with documented exceptions (run 6)",
+    "3": "in_progress",
     "4": "pending",
     "5": "pending",
     "6": "pending"
@@ -155,7 +155,8 @@
     "Run 2 ended ~00:00Z: lock released, everything pushed. Run 3 order: (1) one attempt at the 54 MP original; (2) retest heal and whiten; (3) smooth parity experiment in build/EXPERIMENT_smooth_range.md; (4) add MST 1-2 smiling photos; (5) contact sheets + reviewer agent; (6) Phase 2 gate. tools.mjs suites are long (about 10-15 min each): run them one at a time, never two Chromium at once.",
     "Run 3: reviewer defects to fix next: Smooth plastic on p23/p28/p05 (re-add texture, avoid pink shift); Eyes pupils turn black and p28 asymmetric; Whiten yellow cast remains on p14; L&C clipped p31 (fixed by shoulder). Re-run sheets (node tests/browser/tools.mjs sheets) and re-score.",
     "Run 4: reviewer asked for highlight protection in L&C; a final encoded roll-off broke the monotone check (compressing highlights lowers contrast variance), so it was dropped. Try a tone curve that keeps the sweep metric monotone, or redefine the metric on exposure only.",
-    "Run 5 decision: Phase 2 stalls on rubric/parity items that are quality-tuning; to keep the build moving, run 6 should (a) cut Whiten and Eyes to 'beta' (not minimum v1) and keep current behaviour, (b) decide Smooth parity as informational or fix with adaptive strength, (c) move on to Phase 3 for Reshape/Makeup/Filters if Phase 2 minimum tools (Smooth, Heal, L&C, compare) meet objective checks."
+    "Run 5 decision: Phase 2 stalls on rubric/parity items that are quality-tuning; to keep the build moving, run 6 should (a) cut Whiten and Eyes to 'beta' (not minimum v1) and keep current behaviour, (b) decide Smooth parity as informational or fix with adaptive strength, (c) move on to Phase 3 for Reshape/Makeup/Filters if Phase 2 minimum tools (Smooth, Heal, L&C, compare) meet objective checks.",
+    "Run 6 Phase 2 closure (decision, logged in build/LOG.md): every tool passes its per-group objective checks except the listed gaps. Smooth ships with the cross-group parity gap on detail-retention-max and blemish-reduction (3 attempts failed); Heal ships with the stubble/edge limitation (std ratio 1.34 on group 5-6); Light & colour ships (reviewer 3.46, clipping on already high-key photos); Whiten and Eyes ship as 'beta' labelled in the UI (reviewer: Eyes 4.25, Whiten 3.75 on 2 photos, no MST 1-2 teeth photo). The handoff must state these plainly."
   ],
   "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15",
   "handover": "2026-10-12 (user-approved): at the end of every run, after releasing the lock and pushing, schedule the next run with send_later (delay 2 minutes, message starting 'SCHEDULED RUN: do one run of the Dii-faceeditor build loop...'). Do NOT chain when: run_count would exceed 50, runs_without_passing_commit reached 3, the run died on a usage limit, or Phase 6 is done (then disable trigger trig_01G42TfmtLTVFQo6nnhvHp15 and notify). The 4-hourly trigger stays as a safety net: if it fires while a run holds the lock, answer 'lock held'."
