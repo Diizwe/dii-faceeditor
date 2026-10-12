@@ -19,6 +19,15 @@ export function previewPixels(bmp: ImageBitmap): Uint8ClampedArray {
 export function refinedAlpha(preview: ImageBitmap, raw: { w: number; h: number; alpha: Float32Array }, edge: number): Uint8Array {
   const a = new Float32Array(raw.alpha.length); for (let i = 0; i < a.length; i++) a[i] = Math.min(1, Math.max(0, raw.alpha[i] / 255));
   const r = refineAlpha(a, previewPixels(preview), raw.w, raw.h, edge), out = new Uint8Array(r.length);
-  for (let i = 0; i < r.length; i++) out[i] = Math.round(r[i] * 255);
+  // narrow the feather: a steep curve around 0.5 gives a cut about 2-4 px wide instead of a wide glow that matches the old background
+  const steep = new Float32Array(r.length);
+  for (let i = 0; i < r.length; i++) { const t = Math.min(1, Math.max(0, (r[i] - 0.42) / 0.22)); steep[i] = t * t * (3 - 2 * t); }
+  // one pixel of erosion removes the last rim of old background that still carries partial coverage
+  const { w, h } = raw;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let m = steep[y * w + x];
+    if (m > 0) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = Math.min(w - 1, Math.max(0, x + dx)), yy = Math.min(h - 1, Math.max(0, y + dy)); m = Math.min(m, steep[yy * w + xx] + 0.15); }
+    out[y * w + x] = Math.round(Math.min(1, m) * 255);
+  }
   return out;
 }
