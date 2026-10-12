@@ -2,6 +2,7 @@
 export interface Control { tool: string; id: string; label: string; min: number; max: number; step: number; default: number; unit?: string; }
 
 export const CONTROLS: Control[] = [
+  { tool: 'filters', id: 'strength', label: 'Strength', min: 0, max: 100, step: 1, default: 40 },
   { tool: 'whiten', id: 'strength', label: 'Whiten', min: 0, max: 100, step: 1, default: 40 },
   { tool: 'eyes', id: 'brighten', label: 'Brighten iris', min: 0, max: 100, step: 1, default: 30 },
   { tool: 'eyes', id: 'clarity', label: 'Iris clarity', min: 0, max: 100, step: 1, default: 35 },
@@ -14,6 +15,7 @@ export const CONTROLS: Control[] = [
   { tool: 'light', id: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1, default: 0 },
 ];
 
+export const FILTER_LOOKS = ['Natural boost', 'Warm glow', 'Cool', 'Matte', 'Film', 'Mono', 'Vivid', 'Soft pastel'];
 export const controlsOf = (tool: string) => CONTROLS.filter((c) => c.tool === tool);
 export const defaultsOf = (tool: string): Record<string, number> => Object.fromEntries(controlsOf(tool).map((c) => [c.id, c.default]));
 /** default as a fraction of the control's range (bipolar controls: distance from zero over the larger side) */

@@ -4,6 +4,7 @@ import { editFrom } from '../core/edit';
 import { LightPanel } from './LightPanel';
 import { RetouchPanel } from './RetouchPanel';
 import { HealPanel } from './HealPanel';
+import { FilterPanel } from './FilterPanel';
 import { PreviewHealer, healOps } from '../core/healer';
 import { active as activeOps } from '../core/history';
 import { rasterMask, rasterTeeth, rasterIris } from '../core/facemask';
@@ -16,7 +17,7 @@ import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
+type Panel = 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -64,7 +65,7 @@ export function Editor() {
       const scale = Math.sqrt(Math.abs(inv[0] * inv[4] - inv[1] * inv[3]));
       face = { mask: maskCache.current.canvas, teeth: maskCache.current.teeth, iris: maskCache.current.iris, maskKey: key, fw: mf.box[2] * scale, skin: st };
     }
-    return { w, h, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, face, m: mm };
+    return { w, h, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, face, m: mm };
   }, [E, image, k]);
 
   const [srcVersion, setSrcVersion] = useState(0);
@@ -248,15 +249,16 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'heal'} onClick={() => setPanel('heal')} data-testid="tool-heal">Heal</button>
         <button aria-pressed={panel === 'crop'} onClick={() => setPanel('crop')} data-testid="tool-crop">Crop &amp; rotate</button>
-        <button aria-pressed={panel === 'whiten'} onClick={() => setPanel('whiten')} data-testid="tool-whiten">Whiten</button>
-        <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes</button>
+        <button aria-pressed={panel === 'whiten'} onClick={() => setPanel('whiten')} data-testid="tool-whiten">Whiten (beta)</button>
+        <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes (beta)</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
+        <button aria-pressed={panel === 'filters'} onClick={() => setPanel('filters')} data-testid="tool-filters">Filters</button>
         <button aria-pressed={panel === 'faces'} onClick={() => setPanel('faces')} data-testid="tool-faces">Faces</button>
         <button aria-pressed={panel === 'export'} onClick={() => setPanel('export')} data-testid="tool-export">Export</button>
       </nav>

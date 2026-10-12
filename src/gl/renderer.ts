@@ -160,6 +160,43 @@ void main(){
   o = vec4(clamp(mix(c, e, m), 0.0, 1.0), 1.0);
 }`;
 
+// Filters: eight looks as colour-grade functions, mixed in by strength. Skin inside the picked face's mask keeps its hue (lock = 1 for neutral looks, 0.85 for the warm/cool looks).
+const FILTER = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform sampler2D uMask; uniform float uUseMask; uniform float uLook; uniform float uS;
+out vec4 o;
+vec3 sat(vec3 c, float k){ float y = dot(c, vec3(0.2126, 0.7152, 0.0722)); return y + (c - y) * k; }
+vec3 look(vec3 c, int id){
+  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  if (id == 0) { return sat(c, 1.18) + (c - 0.5) * 0.08; }                              // Natural boost
+  if (id == 1) { return c * vec3(1.06, 1.0, 0.92) + vec3(0.03, 0.012, -0.01); }         // Warm glow
+  if (id == 2) { return c * vec3(0.93, 1.0, 1.07) + vec3(-0.02, 0.0, 0.03); }           // Cool
+  if (id == 3) { return mix(vec3(0.07), vec3(0.95), c) ; }                               // Matte fade
+  if (id == 4) { vec3 t = c + (0.5 - c) * 0.0; t = (t - 0.5) * 1.12 + 0.5; t += vec3(-0.01, 0.015, 0.0) * (1.0 - y); return sat(t, 0.92); } // Film
+  if (id == 5) { return vec3(y); }                                                       // Mono
+  if (id == 6) { return sat((c - 0.5) * 1.12 + 0.5, 1.35); }                            // Vivid
+  return sat(mix(c, vec3(0.92, 0.9, 0.95), 0.18), 0.82);                                 // Soft pastel
+}
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c = texelFetch(uTex, p, 0).rgb;
+  if (uS <= 0.0) { o = vec4(c, 1.0); return; }
+  int id = int(uLook + 0.5);
+  vec3 l = clamp(look(c, id), 0.0, 1.0);
+  vec3 m = mix(c, l, uS);
+  float fm = uUseMask > 0.5 ? clamp(texelFetch(uMask, p, 0).r, 0.0, 1.0) : 0.0;
+  if (fm > 0.0) {
+    float lockK = (id == 1 || id == 2) ? 0.85 : 1.0;
+    float y0 = dot(c, vec3(0.2126, 0.7152, 0.0722)), y1 = dot(m, vec3(0.2126, 0.7152, 0.0722));
+    vec3 d0 = c - y0, d1 = m - y1;
+    float kk = length(d1) / max(length(d0), 1e-5);
+    vec3 room = mix(y1 / max(-d0, vec3(1e-6)), (1.0 - y1) / max(d0, vec3(1e-6)), step(0.0, d0));
+    vec3 keep = y1 + d0 * min(min(kk, 4.0), min(room.r, min(room.g, room.b)));
+    m = mix(m, keep, lockK * fm);
+  }
+  o = vec4(clamp(m, 0.0, 1.0), 1.0);
+}`;
+
 const PRESENT = `#version 300 es
 precision highp float;
 uniform sampler2D uTexB; uniform float uSplit;
@@ -187,7 +224,7 @@ export interface FaceMask {
   skin: { cb: number; cr: number; tol: number };
 }
 export interface SmoothParams { strength: number; keep: number } // 0..100
-export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; }
+export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -337,13 +374,13 @@ export class Renderer {
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = this.work;
-    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes) return;
+    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter) return;
     this.edited ??= this.target(w, h, true, true);
     let cur: Target = this.work;
     const flip = this.temp(3, w, h, true);
     const next = (): Target => (cur === this.edited ? flip : this.edited!);
     const face = plan.face ?? null;
-    if (face && (plan.smooth || plan.light || plan.whiten || plan.eyes)) {
+    if (face && (plan.smooth || plan.light || plan.whiten || plan.eyes || plan.filter)) {
       const feather = Math.max(2, 0.015 * face.fw) / 2;
       this.ensureMask('face', face.mask, face.maskKey, feather, w, h);
       if (plan.whiten && face.teeth) this.ensureMask('teeth', face.teeth, face.maskKey, feather, w, h);
@@ -375,6 +412,11 @@ export class Renderer {
       const L = plan.light, dst = next();
       const useMask = face && this.maskTex ? 1 : 0;
       this.pass('light', LIGHT, dst, { uTex: cur.tex, uMask: (this.maskTex ?? cur).tex }, { uA: [L.exposure, L.contrast / 100, L.warmth / 100, L.saturation / 100], uUseMask: useMask });
+      cur = dst;
+    }
+    if (plan.filter) {
+      const dst = next(), useMask = face && this.maskTex ? 1 : 0;
+      this.pass('filter', FILTER, dst, { uTex: cur.tex, uMask: (this.maskTex ?? cur).tex }, { uLook: plan.filter.look, uS: plan.filter.strength / 100, uUseMask: useMask });
       cur = dst;
     }
     gl.bindTexture(gl.TEXTURE_2D, cur.tex); gl.generateMipmap(gl.TEXTURE_2D);

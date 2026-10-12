@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-6",
-    "acquired_at": "2026-10-12T09:47:26.282235+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -139,6 +139,26 @@
       "id": "2.8",
       "title": "Phase 2 gate: objective checks all groups + reviewer agent rubric scores (>=4.0) from before/after contact sheets (tools.mjs sheets)",
       "status": "run 4 reviewer: Smooth 4.28 pass, Eyes 4.25 pass, Whiten 3.75 fail, L&C 3.46 fail. Open: heal edge cases, whiten, L&C, smooth parity, MST 1-2 teeth photos"
+    },
+    {
+      "id": "3.1",
+      "title": "Filters (8 looks, strength 40 default)",
+      "status": "done: identity 0, monotone 0, skin hue shift within 3 deg (8 deg warm/cool, locked to 0.85), clipping <= 0.0001, all groups on an 11-photo subset"
+    },
+    {
+      "id": "3.2",
+      "title": "Makeup (lip, blush, brow)",
+      "status": "todo"
+    },
+    {
+      "id": "3.3",
+      "title": "Reshape (TPS warp sliders) incl. straight-lines-at-50% check",
+      "status": "todo"
+    },
+    {
+      "id": "3.4",
+      "title": "Liquify brush",
+      "status": "todo"
     }
   ],
   "open_failures": [],

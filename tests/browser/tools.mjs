@@ -389,6 +389,36 @@ if (only === 'sheets') {
   console.log('sheets written to', outDir);
 }
 
+if (!only || only === 'filters') {
+  const M = T.metrics; const subset = manifest.filter((p, i) => i % 3 === 0); const rowsAll = {};
+  const looks = ['Natural boost', 'Warm glow', 'Cool', 'Matte', 'Film', 'Mono', 'Vivid', 'Soft pastel'];
+  const idOk = await page.evaluate(async () => {
+    const f = await window.H.setFace('photos/p05.jpg'); const base = await window.H.toolFrame(null, null);
+    let worst = 0; for (let l = 0; l < 8; l++) { const fr = await window.H.toolFrame('filters', { look: l, strength: 0 }); for (let i = 0; i < fr.data.length; i++) worst = Math.max(worst, Math.abs(fr.data[i] - base.data[i]) * 255); }
+    // monotone: mean abs change from base grows with strength for each look
+    let viol = 0; for (let l = 0; l < 8; l++) { let prev = -1; for (let st = 0; st <= 100; st += 5) { const fr = await window.H.toolFrame('filters', { look: l, strength: st }); let d = 0; for (let i = 0; i < fr.data.length; i += 4 * 9) d += Math.abs(fr.data[i] - base.data[i]) + Math.abs(fr.data[i + 1] - base.data[i + 1]) + Math.abs(fr.data[i + 2] - base.data[i + 2]); if (d < prev - 1e-6) viol++; prev = d; } }
+    return { worst, viol };
+  });
+  check('M_lc_identity_max_diff filters (strength 0)', idOk.worst, idOk.worst <= M.M_lc_identity_max_diff.max);
+  check('M_lc_monotone_violations filters', idOk.viol, idOk.viol <= M.M_lc_monotone_violations.max);
+  for (const p of subset) {
+    const r = await page.evaluate(async ({ file, n }) => {
+      const f = await window.H.setFace(file); if (!f) return null;
+      const base = await window.H.toolFrame(null, null);
+      await window.H.toolFrame('filters', { look: 0, strength: 40 }); const mk = window.__dii.renderer.readMask(); if (!mk) return null;
+      const idxs = []; for (let y = 0; y < mk.h; y += 3) for (let x = 0; x < mk.w; x += 3) if (mk.data[(y * mk.w + x) * 4] >= 0.99) idxs.push(y * mk.w + x);
+      const out = [];
+      for (let l = 0; l < n; l++) { const fr = await window.H.toolFrame('filters', { look: l, strength: 40 }); let clip = 0; for (let i = 0; i < fr.data.length; i += 4) for (let c = 0; c < 3; c++) if ((fr.data[i + c] >= 1 && base.data[i + c] < 1) || (fr.data[i + c] <= 0 && base.data[i + c] > 0)) clip++; out.push({ look: l, hue: window.H.hueShift(base, fr, idxs), clip: clip / (base.w * base.h * 3) }); }
+      return out;
+    }, { file: p.file, n: looks.length });
+    if (!r) continue; (rowsAll[groupOf[p.id]] ??= []).push(...r.map((x) => ({ id: p.id, ...x }))); if (process.env.DBG) console.log(p.id, JSON.stringify(r.map((x) => +x.hue.toFixed(2))));
+  }
+  for (const [g, rows] of Object.entries(rowsAll)) {
+    for (let l = 0; l < looks.length; l++) { const rr = rows.filter((x) => x.look === l); const lim = (l === 1 || l === 2) ? 8 : 3; const mx = Math.max(...rr.map((x) => x.hue)); check(`M_skin_hue_shift_deg filter ${looks[l]} MST ${g}`, mx, mx <= lim, { limit: lim, n: rr.length }); }
+    const cl = Math.max(...rows.map((x) => x.clip)); check(`M_clipped_px_increase filters MST ${g}`, cl, cl <= M.M_clipped_px_increase.max);
+  }
+}
+
 check('no_page_errors', errs.slice(0, 3), errs.length === 0);
 await browser.close(); server.close();
 fs.writeFileSync('/tmp/tools-report.json', JSON.stringify(results, null, 1));
