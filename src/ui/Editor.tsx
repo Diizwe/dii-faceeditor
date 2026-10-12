@@ -8,6 +8,9 @@ import { FilterPanel } from './FilterPanel';
 import { MakeupPanel } from './MakeupPanel';
 import { ReshapePanel } from './ReshapePanel';
 import { LiquifyPanel } from './LiquifyPanel';
+import { BackgroundPanel } from './BackgroundPanel';
+import { refinedAlpha, BG_COLOURS } from '../core/background';
+import { segmentPerson } from '../core/faces';
 import { buildLiquify } from '../core/liquify';
 import { buildField } from '../core/reshape';
 import { PreviewHealer, healOps } from '../core/healer';
@@ -16,13 +19,13 @@ import { rasterMask, rasterTeeth, rasterIris, rasterMakeup } from '../core/facem
 import { skinStats } from '../core/skin';
 import { detectFaces } from '../core/faces';
 import { invert, apply } from '../core/geometry';
-import { Renderer, type View, type SmoothParams, type FaceMask } from '../gl/renderer';
+import { Renderer, type View, type SmoothParams, type FaceMask, type Plan } from '../gl/renderer';
 import { outToSource, outputSize } from '../core/geometry';
 import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'liquify' | 'reshape' | 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
+type Panel = 'background' | 'liquify' | 'reshape' | 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -48,6 +51,7 @@ export function Editor() {
 
   const split = useStore((s) => s.split);
   // everything the renderer needs, derived once per history/face change by the same function the export uses
+  const bgRaw = useStore((s) => s.bgRaw);
   const E = useMemo(() => editFrom(history, faces, activeFace), [history, faces, activeFace]);
   const maskCache = useRef<{ key: string; canvas: OffscreenCanvas | HTMLCanvasElement; teeth: OffscreenCanvas | HTMLCanvasElement | null; iris: OffscreenCanvas | HTMLCanvasElement | null; makeup: OffscreenCanvas | HTMLCanvasElement | null } | null>(null);
   const skinCache = useRef(new Map<number, { cb: number; cr: number; tol: number }>());
@@ -83,8 +87,13 @@ export function Editor() {
       const grid = buildLiquify(strokes, 0, 0, w, h, 6), last = E.liquify[E.liquify.length - 1];
       if (grid) liquify = { grid, key: `${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}|${E.liquify.length}|${last.pts.length}|${last.pts[last.pts.length - 1].x.toFixed(1)}|${last.mode}` };
     }
-    return { w, h, warp, liquify, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, makeup: E.makeup, face, m: mm };
-  }, [E, image, k]);
+    let bg: NonNullable<Plan['bg']> | null = null;
+    if (E.background && bgRaw) {
+      const colours = BG_COLOURS[E.background.colour] ?? BG_COLOURS[0], second = BG_COLOURS[(E.background.colour + 2) % BG_COLOURS.length];
+      bg = { alpha: { w: bgRaw.w, h: bgRaw.h, data: refinedAlpha(image.preview, bgRaw, E.background.edge) }, key: `edge${E.background.edge}`, mode: E.background.mode, blurPx: (E.background.blur / 100) * 0.012 * Math.min(w, h), c1: colours.rgb, c2: second.rgb };
+    }
+    return { w, h, bg, warp, liquify, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, makeup: E.makeup, face, m: mm };
+  }, [E, image, k, bgRaw]);
 
   const [srcVersion, setSrcVersion] = useState(0);
   const healer = useRef<PreviewHealer | null>(null);
@@ -112,6 +121,16 @@ export function Editor() {
     h.apply(healOps(activeOps(history))).then((bmp) => { if (cancelled) return; r.setSource(bmp); setSrcVersion((v) => v + 1); }).catch(() => useStore.getState().setError('Heal could not finish. Try a smaller brush.'));
     return () => { cancelled = true; };
   }, [healKey, image]);
+
+  // person segmentation, on demand: only when the Background tool has been used
+  useEffect(() => {
+    if (!E.background || bgRaw) return;
+    let cancelled = false; const st = useStore.getState(); st.setBusy('Finding the person…');
+    segmentPerson(image.preview).then((r) => { if (!cancelled) useStore.getState().setBgRaw(r); })
+      .catch(() => { if (!cancelled) useStore.getState().setError('Background tools are unavailable: the person model could not be loaded.'); })
+      .finally(() => useStore.getState().setBusy(null));
+    return () => { cancelled = true; };
+  }, [!!E.background, bgRaw, image]);
 
   // find faces once per photo, in the background: Smooth, Light & colour (skin protection) and the picker all use them
   useEffect(() => {
@@ -270,7 +289,7 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'liquify' ? <LiquifyPanel /> : panel === 'reshape' ? <ReshapePanel /> : panel === 'makeup' ? <MakeupPanel /> : panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'background' ? <BackgroundPanel /> : panel === 'liquify' ? <LiquifyPanel /> : panel === 'reshape' ? <ReshapePanel /> : panel === 'makeup' ? <MakeupPanel /> : panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'heal'} onClick={() => setPanel('heal')} data-testid="tool-heal">Heal</button>
@@ -279,6 +298,7 @@ export function Editor() {
         <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes (beta)</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
+        <button aria-pressed={panel === 'background'} onClick={() => setPanel('background')} data-testid="tool-background">Background</button>
         <button aria-pressed={panel === 'liquify'} onClick={() => setPanel('liquify')} data-testid="tool-liquify">Liquify</button>
         <button aria-pressed={panel === 'reshape'} onClick={() => setPanel('reshape')} data-testid="tool-reshape">Reshape</button>
         <button aria-pressed={panel === 'makeup'} onClick={() => setPanel('makeup')} data-testid="tool-makeup">Makeup</button>

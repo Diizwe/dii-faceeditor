@@ -3,6 +3,7 @@ import { useStore, geometryOf } from '../store';
 import { editFrom } from '../core/edit';
 import { healOps } from '../core/healer';
 import { active } from '../core/history';
+import { refinedAlpha } from '../core/background';
 import { exportImage } from '../core/export';
 import { outputSize } from '../core/geometry';
 
@@ -20,7 +21,7 @@ export function ExportPanel() {
     setProgress(0); setDone(null); useStore.getState().setError(null);
     try {
       const st = useStore.getState();
-      const res = await exportImage(image, { format, quality, geometry: g, heal: healOps(active(st.history)), edit: editFrom(st.history, st.faces, st.activeFace), onProgress: setProgress });
+      const res = await exportImage(image, { format, quality, geometry: g, bgAlpha: (() => { const e = editFrom(st.history, st.faces, st.activeFace); return e.background && st.bgRaw ? { w: st.bgRaw.w, h: st.bgRaw.h, data: refinedAlpha(image.preview, st.bgRaw, e.background.edge) } : undefined; })(), heal: healOps(active(st.history)), edit: editFrom(st.history, st.faces, st.activeFace), onProgress: setProgress });
       const name = image.name.replace(/\.[^.]+$/, '') + '-edited.' + (format === 'jpeg' ? 'jpg' : 'png');
       const file = new File([res.blob], name, { type: res.blob.type });
       if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch { /* cancelled */ } }

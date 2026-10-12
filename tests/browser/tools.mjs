@@ -185,6 +185,7 @@ if (!only || only === 'parity') {
     reshape: [{ tool: 'reshape', params: { jaw: 60, chin: 40, noseW: 50, noseL: 30, eyeSize: 40, eyeDist: 20, lips: 40, faceW: 50 } }],
     makeupfilter: [{ tool: 'makeup', params: { lip: 30, blush: 25, brow: 25, colour: 1, face: null } }, { tool: 'filters', params: { look: 4, strength: 50 } }],
     liquify: [{ tool: 'liquify', params: { pts: [{ x: 500, y: 700 }, { x: 560, y: 720 }, { x: 640, y: 740 }], r: 110, strength: 70, mode: 'push' } }, { tool: 'liquify', params: { pts: [{ x: 700, y: 560 }], r: 90, strength: 60, mode: 'bloat' } }, { tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 3, aspect: 0.85 } }],
+    background: [{ tool: 'background', params: { mode: 0, blur: 60, edge: 40, colour: 0 } }],
     combo: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 6, aspect: 0.8 } }, { tool: 'smooth', params: { strength: 40, soften: 30, face: null } }, { tool: 'light', params: { exposure: -0.2, contrast: 10, warmth: -20, saturation: 10 } }],
   };
   const M = T.metrics;
@@ -459,6 +460,33 @@ if (!only || only === 'makeup') {
     check(`M_makeup_luma_correlation MST ${g}`, mn, mn >= M.M_makeup_luma_correlation.min, { n: rows.length });
     check(`M_outside_mask_changed_px makeup MST ${g}`, mxo, mxo <= 0);
     check(`M_clipped_px_increase makeup MST ${g}`, mc, mc <= M.M_clipped_px_increase.max);
+  }
+}
+
+if (!only || only === 'background') {
+  const M = T.metrics; const subset = manifest.filter((p, i) => i % 3 === 0); const rowsAll = {};
+  for (const p of subset) {
+    const r = await page.evaluate(async (file) => {
+      const f = await window.H.setFace(file); const t = window.__diiTest;
+      const base = await window.H.toolFrame(null, null);
+      const out = [];
+      for (const params of [{ mode: 1, blur: 0, edge: 40, colour: 1 }, { mode: 1, blur: 0, edge: 40, colour: 0 }, { mode: 0, blur: 70, edge: 40, colour: 0 }, { mode: 2, blur: 0, edge: 80, colour: 2 }]) {
+        t.store.setState({ history: { ops: [], ptr: 0, open: null } }); t.store.getState().edit({ tool: 'background', params });
+        for (let i = 0; i < 600 && !t.store.getState().bgRaw; i++) await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 700));
+        const fr = window.__dii.renderer.readOutHalf(); const st = t.store.getState(); const alpha = t.refinedAlpha(st.image.preview, st.bgRaw, params.edge);
+        const N = base.w * base.h; let core = 0, coreN = 0, bgChanged = 0, bgN = 0;
+        for (let i = 0; i < N; i++) { let d = 0; for (let c = 0; c < 3; c++) d = Math.max(d, Math.abs(fr.data[i * 4 + c] - base.data[i * 4 + c]) * 255);
+          if (alpha[i] > 250) { coreN++; if (d > 1) core++; } else if (alpha[i] < 5) { bgN++; if (d > 3) bgChanged++; } }
+        out.push({ core, coreN, bgFrac: bgN ? bgChanged / bgN : 0, bgN, black: params.colour === 1 && params.mode === 1 });
+      }
+      return out;
+    }, p.file);
+    if (!r) continue; (rowsAll[groupOf[p.id]] ??= []).push(...r.map((x) => ({ id: p.id, ...x }))); if (process.env.DBG) console.log(p.id, JSON.stringify(r));
+  }
+  for (const [g, rows] of Object.entries(rowsAll)) {
+    const mx = Math.max(...rows.map((x) => x.core)); check(`M_bg_person_core_changed_px MST ${g}`, mx, mx <= M.M_bg_person_core_changed_px.max, { n: rows.length });
+    const withBg = rows.filter((x) => x.black && x.bgN > 2000); const eff = withBg.length ? Math.min(...withBg.map((x) => x.bgFrac)) : 1; check(`background_visibly_changed (black replace: >=20% of background px differ) MST ${g}`, eff, withBg.length === 0 || eff >= 0.2, { n: withBg.length });
   }
 }
 

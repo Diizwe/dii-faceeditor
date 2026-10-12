@@ -4,5 +4,5 @@ import path from 'node:path';
 const src = path.resolve('node_modules/@vladmandic/human-models/models');
 const dst = path.resolve('public/models');
 fs.mkdirSync(dst, { recursive: true });
-for (const n of ['blazeface', 'facemesh', 'iris']) for (const ext of ['json', 'bin']) fs.copyFileSync(path.join(src, `${n}.${ext}`), path.join(dst, `${n}.${ext}`));
+for (const n of ['blazeface', 'facemesh', 'iris', 'selfie']) for (const ext of ['json', 'bin']) fs.copyFileSync(path.join(src, `${n}.${ext}`), path.join(dst, `${n}.${ext}`));
 console.log('models copied to public/models');

@@ -233,6 +233,21 @@ void main(){
   o = vec4(texture(uTex, (p + b) / sz).rgb, 1.0);
 }`;
 
+// Background: blur, solid colour or vertical gradient behind the person. alpha is snapped to exactly 1 above 0.98, so the person's core is never touched.
+const BG = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform sampler2D uBlur; uniform sampler2D uAlpha; uniform float uMode; uniform vec3 uC1; uniform vec3 uC2;
+out vec4 o;
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c = texelFetch(uTex, p, 0).rgb;
+  float a = clamp(texelFetch(uAlpha, p, 0).r / 0.98, 0.0, 1.0);
+  if (a >= 1.0) { o = vec4(c, 1.0); return; }
+  vec2 sz = vec2(textureSize(uTex, 0));
+  vec3 fill = uMode < 0.5 ? texelFetch(uBlur, p, 0).rgb : uMode < 1.5 ? uC1 : mix(uC1, uC2, gl_FragCoord.y / sz.y);
+  o = vec4(mix(fill, c, a), 1.0);
+}`;
+
 const PRESENT = `#version 300 es
 precision highp float;
 uniform sampler2D uTexB; uniform float uSplit;
@@ -261,7 +276,7 @@ export interface FaceMask {
   skin: { cb: number; cr: number; tol: number };
 }
 export interface SmoothParams { strength: number; keep: number } // 0..100
-export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; makeup?: { lip: [number, number, number]; lipOp: number; blushOp: number; browOp: number } | null; warp?: { field: { G: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; liquify?: { grid: { Gx: number; Gy: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; }
+export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; makeup?: { lip: [number, number, number]; lipOp: number; blushOp: number; browOp: number } | null; warp?: { field: { G: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; bg?: { alpha: { w: number; h: number; data: Uint8Array }; key: string; m?: Affine; mode: number; blurPx: number; c1: [number, number, number]; c2: [number, number, number] } | null; liquify?: { grid: { Gx: number; Gy: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -342,8 +357,8 @@ export class Renderer {
 
   private free(t: Target | null) { if (t) { this.gl.deleteTexture(t.tex); this.gl.deleteFramebuffer(t.fbo); } }
 
-  private runGeometry(m: Affine, outW: number, outH: number, dst: Target) {
-    const gl = this.gl, src = this.src!;
+  private runGeometry(m: Affine, outW: number, outH: number, dst: Target, srcOverride?: { tex: WebGLTexture; w: number; h: number }) {
+    const gl = this.gl, src = srcOverride ?? this.src!;
     gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
     gl.viewport(0, 0, outW, outH);
     gl.useProgram(this.progGeom);
@@ -411,7 +426,7 @@ export class Renderer {
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = this.work;
-    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter && !plan.makeup && !plan.warp && !plan.liquify) return;
+    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter && !plan.makeup && !plan.warp && !plan.liquify && !plan.bg) return;
     this.edited ??= this.target(w, h, true, true);
     let cur: Target = this.work;
     const flip = this.temp(3, w, h, true);
@@ -451,6 +466,28 @@ export class Renderer {
       this.pass('makeup', MAKEUP, dst, { uTex: cur.tex, uMask: this.masks.get('makeup')!.t.tex, uSkin: (this.maskTex ?? cur).tex }, { uLip: [...mk.lip] as number[], uBlush: [0.93, 0.45, 0.45], uOp: [mk.lipOp, mk.blushOp, mk.browOp] } as never);
       cur = dst;
     }
+    if (plan.bg) {
+      const b = plan.bg, dst = next();
+      if (!this.alphaSrc || this.alphaSrc.key !== b.alpha.w + 'x' + b.alpha.h + '|' + b.key) {
+        if (this.alphaSrc) gl.deleteTexture(this.alphaSrc.tex);
+        const tex = gl.createTexture()!; gl.bindTexture(gl.TEXTURE_2D, tex); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, b.alpha.w, b.alpha.h, 0, gl.RED, gl.UNSIGNED_BYTE, b.alpha.data);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        this.alphaSrc = { tex, w: b.alpha.w, h: b.alpha.h, key: b.alpha.w + 'x' + b.alpha.h + '|' + b.key };
+      }
+      if (!this.alphaTgt || this.alphaTgt.w !== w || this.alphaTgt.h !== h) { this.free(this.alphaTgt); this.alphaTgt = this.target(w, h, false, false); }
+      this.runGeometry(b.m ?? plan.m, w, h, this.alphaTgt, this.alphaSrc);
+      let blurred = cur;
+      if (b.mode < 0.5 && b.blurPx > 0.3) {
+        const n = Math.max(1, Math.ceil((b.blurPx / 20) ** 2)), sg = b.blurPx / Math.sqrt(n), A = this.temp(4, w, h), B = this.temp(5, w, h), M = this.temp(6, w, h);
+        let from: Target = cur;
+        for (let i = 0; i < n; i++) { const to = i % 2 === 0 ? A : B; this.blur(from, to, M, Math.max(0.5, sg), 0); from = to; }
+        blurred = from;
+      }
+      this.pass('bg', BG, dst, { uTex: cur.tex, uBlur: blurred.tex, uAlpha: this.alphaTgt.tex }, { uMode: b.mode, uC1: [...b.c1] as number[], uC2: [...b.c2] as number[] } as never);
+      cur = dst;
+    }
     if (plan.light) {
       const L = plan.light, dst = next();
       const useMask = face && this.maskTex ? 1 : 0;
@@ -468,6 +505,7 @@ export class Renderer {
     this.out = cur;
   }
 
+  private alphaSrc: { tex: WebGLTexture; w: number; h: number; key: string } | null = null; private alphaTgt: Target | null = null;
   private fields = new Map<string, { tex: WebGLTexture; key: string }>();
   private warpPass(name: string, f: { Gx: number; Gy: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }, key: string, src: Target, dst: Target) {
     const gl = this.gl; let e = this.fields.get(name);
@@ -579,5 +617,5 @@ export class Renderer {
   /** Read the presented canvas (tests). */
   readCanvas(w: number, h: number): Uint8Array { const o = new Uint8Array(w * h * 4); this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); this.gl.readPixels(0, 0, w, h, this.gl.RGBA, this.gl.UNSIGNED_BYTE, o); return o; }
 
-  dispose() { for (const e of this.fields.values()) this.gl.deleteTexture(e.tex); this.free(this.work); this.free(this.edited); this.clearMasks(); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
+  dispose() { if (this.alphaSrc) this.gl.deleteTexture(this.alphaSrc.tex); this.free(this.alphaTgt); for (const e of this.fields.values()) this.gl.deleteTexture(e.tex); this.free(this.work); this.free(this.edited); this.clearMasks(); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
 }

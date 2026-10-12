@@ -44,3 +44,31 @@ export async function detectFaces(img: ImageBitmap | HTMLCanvasElement | Offscre
     mesh: (f.mesh ?? []) as Face['mesh'],
   })).sort((a, b) => a.box[0] - b.box[0]).map((f, i) => ({ ...f, id: i + 1 }));
 }
+
+// ---- person segmentation (selfie model from @vladmandic/human-models, MIT) -----------------------------------------------
+let segP: Promise<HumanT> | null = null;
+export async function loadSegmenter(): Promise<HumanT> {
+  segP ??= (async () => {
+    const { Human } = await import('@vladmandic/human');
+    const h = new Human({
+      backend: 'webgl', modelBasePath: new URL('models/', document.baseURI).toString(), cacheModels: true, warmup: 'none', debug: false, filter: { enabled: false },
+      face: { enabled: false }, body: { enabled: false }, hand: { enabled: false }, object: { enabled: false }, gesture: { enabled: false },
+      segmentation: { enabled: true, modelPath: 'selfie.json' },
+    });
+    await h.load();
+    return h;
+  })().catch((e) => { segP = null; throw e; });
+  return segP;
+}
+
+/** Person alpha (0..1) at the size of the input, as a Float32Array; row 0 = top. */
+export async function segmentPerson(img: ImageBitmap | HTMLCanvasElement | OffscreenCanvas): Promise<{ w: number; h: number; alpha: Float32Array }> {
+  const h = await loadSegmenter();
+  const t = await h.segmentation(img as never);
+  if (!t) throw new Error('segmentation returned nothing');
+  const shape = t.shape as number[]; const data = (await t.data()) as Float32Array; t.dispose?.();
+  const [sh, sw] = shape.length === 4 ? [shape[1], shape[2]] : [shape[0], shape[1]];
+  const ch = data.length / (sh * sw);
+  const out = new Float32Array(sh * sw); for (let i = 0; i < sh * sw; i++) out[i] = data[i * ch + (ch > 1 ? ch - 1 : 0)];
+  return { w: sw, h: sh, alpha: out };
+}

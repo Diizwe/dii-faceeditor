@@ -2,6 +2,8 @@
 export interface Control { tool: string; id: string; label: string; min: number; max: number; step: number; default: number; unit?: string; }
 
 export const CONTROLS: Control[] = [
+  { tool: 'background', id: 'blur', label: 'Blur', min: 0, max: 100, step: 1, default: 40 },
+  { tool: 'background', id: 'edge', label: 'Edge refine', min: 0, max: 100, step: 1, default: 40 },
   { tool: 'liquify', id: 'size', label: 'Brush size', min: 2, max: 25, step: 0.5, default: 8, unit: '%' },
   { tool: 'liquify', id: 'strength', label: 'Strength', min: 0, max: 100, step: 1, default: 30 },
   { tool: 'reshape', id: 'jaw', label: 'Jaw width', min: -100, max: 100, step: 1, default: 0 },

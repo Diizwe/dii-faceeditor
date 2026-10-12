@@ -4,6 +4,7 @@ import { skinStats } from './skin';
 import type { EditState } from './edit';
 import { buildField } from './reshape';
 import { buildLiquify } from './liquify';
+import { BG_COLOURS } from './background';
 import { buildPatches, applyPatches, type HealOp, type Patch } from './healer';
 import { decodeFull, type LoadedImage } from './image';
 import { outToSource, outputSize, apply, invert, type Affine, type Geometry } from './geometry';
@@ -14,6 +15,7 @@ export interface ExportOptions {
   format: 'jpeg' | 'png';
   quality: number;
   geometry: Geometry;
+  bgAlpha?: { w: number; h: number; data: Uint8Array }; // refined person alpha at preview resolution (needed when edit.background is set)
   heal?: HealOp[]; // clean-up strokes in source px, applied before everything else
   edit?: EditState; // retouch + colour on top of the geometry; omitted = geometry only
   tile?: number; // output tile edge, default 2048
@@ -32,7 +34,7 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   const m = outToSource(o.geometry, img.width, img.height, outW, outH);
   const canvas = new OffscreenCanvas(16, 16);
   const r = o.renderer ?? new Renderer(canvas, { colorSpace: img.colorMode, maxTextureSize: o.maxTextureSize ?? 4096 });
-  const E = o.edit, hasPasses = !!(E && (E.smooth || E.light || E.whiten || E.eyes || E.filter || E.makeup || E.reshape || E.liquify.length > 0));
+  const E = o.edit, hasPasses = !!(E && (E.smooth || E.light || E.whiten || E.eyes || E.filter || E.makeup || E.reshape || E.liquify.length > 0 || (E.background && o.bgAlpha)));
   let T = o.tile ?? (hasPasses ? 1024 : 2048);
   const k = img.previewScale;
   const fwFull = E?.face ? E.face.box[2] / k : 0; // face width in full-resolution px: every radius is a multiple of it
@@ -41,7 +43,8 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   // the warp samples up to maxDisp px away, so tiles need that much extra context on top of the retouch support
   const warpPad = E?.reshape && E.face ? (() => { const mesh = (E.face.mesh as [number, number, number][]).map((p) => { const [x, y] = apply(invert(outToSource(o.geometry, img.width, img.height, outW, outH)), p[0] / img.previewScale, p[1] / img.previewScale); return [x, y, 0] as [number, number, number]; }); const f = buildField(mesh, fwFull, E.reshape); return f ? Math.ceil(f.maxDisp) + 4 : 0; })() : 0;
   const liqR = E?.liquify.length ? Math.max(...E.liquify.map((q) => q.r)) : 0; // a liquify stroke moves content at most about one brush radius
-  const pad = basePad + warpPad + Math.ceil(liqR * 1.1);
+  const bgBlurPx = E?.background && E.background.mode === 0 && o.bgAlpha ? (E.background.blur / 100) * 0.012 * Math.min(outW, outH) : 0;
+  const pad = basePad + warpPad + Math.ceil(liqR * 1.1) + Math.ceil(bgBlurPx * 3);
   const margin = 2;
   // liquify: one grid for the whole output (same cell count as the preview), reused by every region with its origin shifted, so tiles match the preview exactly
   const liqGrid = E?.liquify.length ? (() => { const cell = 6 / k; const st = E.liquify.map((q) => ({ mode: q.mode, strength: q.strength, r: q.r, pts: q.pts.map((p) => { const [x, y] = apply(invert(outToSource(o.geometry, img.width, img.height, outW, outH)), p.x, p.y); return { x, y }; }) })); return buildLiquify(st, 0, 0, outW, outH, cell); })() : null;
@@ -105,6 +108,10 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
               if (field) plan.warp = { field, key: `${tx},${ty}` };
             }
             if (liqGrid) plan.liquify = { grid: { ...liqGrid, x0: liqGrid.x0 - rx0, x1: liqGrid.x1 - rx0, y0: liqGrid.y0 - ry0, y1: liqGrid.y1 - ry0 }, key: `${tx},${ty}` };
+            if (E!.background && o.bgAlpha) {
+              const c1 = BG_COLOURS[E!.background.colour] ?? BG_COLOURS[0], c2 = BG_COLOURS[(E!.background.colour + 2) % BG_COLOURS.length];
+              plan.bg = { alpha: o.bgAlpha, key: `edge${E!.background.edge}`, m: rm.map((v) => v * k) as Affine, mode: E!.background.mode, blurPx: bgBlurPx, c1: c1.rgb, c2: c2.rgb };
+            }
             px = r.renderRegionPixels(bmp2, plan, { x: tx - rx0, y: ty - ry0, w: tw, h: th });
             peak = Math.max(peak, bmp2.width * bmp2.height * 4 + rw * rh * 16 * 5);
             bmp2.close();

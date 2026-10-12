@@ -42,7 +42,8 @@ window.H.parity = async (geometry, ops) => {
   const t = window.__diiTest; const st = t.store.getState();
   t.store.setState({ history: { ops: [], ptr: 0, open: null } });
   for (const op of ops) t.store.getState().edit(op);
-  await new Promise((r) => setTimeout(r, 400));
+  if (ops.some((o) => o.tool === 'background')) { for (let i = 0; i < 600 && !t.store.getState().bgRaw; i++) await new Promise((r) => setTimeout(r, 100)); }
+  await new Promise((r) => setTimeout(r, 600));
   const pv = window.__dii.renderer.readOutHalf();
   const s2 = t.store.getState();
   const res = await t.exportImage(s2.image, { format: 'png', quality: 100, geometry, edit: t.editFrom(s2.history, s2.faces, s2.activeFace) });
