@@ -373,7 +373,8 @@ if (only === 'sheets') {
   const tools = { smooth: { tool: 'smooth', params: { strength: 60, soften: 30 }, label: 'Smooth 60' }, light: { tool: 'light', params: { exposure: 0.3, contrast: 20, warmth: 25, saturation: 15 }, label: 'Light & colour' }, whiten: { tool: 'whiten', params: { strength: 100 }, label: 'Whiten 100' }, eyes: { tool: 'eyes', params: { brighten: 60, clarity: 60 }, label: 'Eyes 60/60' },
     reshape: { tool: 'reshape', params: { jaw: 60, chin: 40, noseW: 50, noseL: 0, eyeSize: 40, eyeDist: 0, lips: 40, faceW: 50 }, label: 'Reshape 60/40/50/40/40/50' },
     makeup: { tool: 'makeup', params: { lip: 30, blush: 25, brow: 25, colour: 1 }, label: 'Makeup coral 30/25/25' },
-    filters: { tool: 'filters', params: { look: 4, strength: 60 }, label: 'Filter Film 60' } };
+    filters: { tool: 'filters', params: { look: 4, strength: 60 }, label: 'Filter Film 60' },
+    liquify: { tool: 'liquify', params: { rel: true }, label: 'Liquify: push jaw in, bloat eyes' } };
   for (const [name, spec] of Object.entries(tools)) {
     const tiles = [];
     for (const id of ids) {
@@ -381,7 +382,13 @@ if (only === 'sheets') {
       const b64 = await page.evaluate(async ({ file, spec, label }) => {
         const f = await window.H.setFace(file); if (!f) return null;
         const base = await window.H.toolFrame(null, null);
-        const aft = await window.H.toolFrame(spec.tool, spec.params);
+        let aft;
+        if (spec.params.rel) { const [bx, by, bw, bh] = f.box; const t = window.__diiTest; t.store.setState({ history: { ops: [], ptr: 0, open: null } }); t.store.getState().setCompare(false);
+          t.store.getState().edit({ tool: 'liquify', params: { pts: [{ x: bx + bw * 0.02, y: by + bh * 0.8 }, { x: bx + bw * 0.14, y: by + bh * 0.82 }], r: bw * 0.18, strength: 60, mode: 'push' } });
+          t.store.getState().edit({ tool: 'liquify', params: { pts: [{ x: bx + bw * 0.98, y: by + bh * 0.8 }, { x: bx + bw * 0.86, y: by + bh * 0.82 }], r: bw * 0.18, strength: 60, mode: 'push' } });
+          t.store.getState().edit({ tool: 'liquify', params: { pts: [{ x: bx + bw * 0.5, y: by + bh * 0.9 }], r: bw * 0.15, strength: 50, mode: 'pucker' } });
+          await new Promise((r) => setTimeout(r, 400)); aft = window.__dii.renderer.readOutHalf(); }
+        else aft = await window.H.toolFrame(spec.tool, spec.params);
         const [bx, by, bw, bh] = f.box; const pad = 0.25; const x0 = Math.max(0, Math.floor(bx - bw * pad)), y0 = Math.max(0, Math.floor(by - bh * pad)), x1 = Math.min(base.w, Math.ceil(bx + bw * (1 + pad))), y1 = Math.min(base.h, Math.ceil(by + bh * (1 + pad)));
         const w = x1 - x0, h = y1 - y0;
         const mk = (fr) => { const c = new OffscreenCanvas(w, h), g = c.getContext('2d'); const im = g.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = ((y0 + y) * fr.w + x0 + x) * 4, o = (y * w + x) * 4; for (let k = 0; k < 3; k++) im.data[o + k] = Math.round(Math.min(1, fr.data[i + k]) * 255); im.data[o + 3] = 255; } g.putImageData(im, 0, 0); return c; };
