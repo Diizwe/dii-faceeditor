@@ -35,6 +35,7 @@ export function healDisc(img: Pixels, cx: number, cy: number, r: number): { x: n
   const mean3 = (a: Float32Array) => { let m = 0; for (let i = 0; i < a.length; i++) m += a[i]; return m / a.length; };
   const lumaOf = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const tl = new Float32Array(ctx.length); for (let i = 0; i < ctx.length; i++) tl[i] = lumaOf(tgt[i * 3], tgt[i * 3 + 1], tgt[i * 3 + 2]);
+  const rm = [0, 0, 0]; for (let i = 0; i < ctx.length; i++) for (let c = 0; c < 3; c++) rm[c] += tgt[i * 3 + c] / ctx.length;
   const tm = mean3(tl); let tv = 0; for (let i = 0; i < tl.length; i++) tv += (tl[i] - tm) ** 2; tv /= tl.length;
   const minD = Math.ceil(R * 1.9), maxD = Math.ceil(R * 4.5) + 8;
   const step = Math.max(1, Math.round(R / 14));
@@ -51,10 +52,12 @@ export function healDisc(img: Pixels, cx: number, cy: number, r: number): { x: n
     cost += 0.02 * (dx * dx + dy * dy) / Math.max(1, R); // mild preference for nearby sources
     // the source interior should be as textured as the surroundings (not a smooth patch, not a hair or edge)
     if (cost < best) {
-      let sm = 0, sv = 0, n = 0; const inner: number[] = [];
-      for (let a = 0; a < 12; a++) for (const rr of [0.3, 0.7]) { const x = sx + Math.round(Math.cos((a / 12) * 6.2832) * R * rr), y = sy + Math.round(Math.sin((a / 12) * 6.2832) * R * rr); const l = lumaOf(px(x, y, 0), px(x, y, 1), px(x, y, 2)); inner.push(l); sm += l; n++; }
+      let sm = 0, sv = 0, n = 0; const inner: number[] = []; const im = [0, 0, 0];
+      for (let a = 0; a < 12; a++) for (const rr of [0.3, 0.7]) { const x = sx + Math.round(Math.cos((a / 12) * 6.2832) * R * rr), y = sy + Math.round(Math.sin((a / 12) * 6.2832) * R * rr); const l = lumaOf(px(x, y, 0), px(x, y, 1), px(x, y, 2)); inner.push(l); sm += l; n++; for (let c = 0; c < 3; c++) im[c] += px(x, y, c); }
       sm /= n; for (const l of inner) sv += (l - sm) ** 2; sv /= n;
       cost += 4 * ctx.length * Math.abs(Math.sqrt(sv) - Math.sqrt(tv));
+      // and its average colour must match the surroundings: a clean patch, not a dark stubble clump or a shadow edge
+      for (let c = 0; c < 3; c++) cost += 6 * ctx.length * Math.abs(im[c] / n - rm[c]);
     }
     if (cost < best) { best = cost; bx = dx; by = dy; }
   }

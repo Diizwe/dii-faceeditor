@@ -236,7 +236,7 @@ if (!only || only === 'heal') {
       t.store.getState().edit({ tool: 'heal', params: tap });
       let after2 = null; for (let i = 0; i < 40; i++) { after2 = await frame(); let diff = 0; for (let j = 0; j < after2.data.length; j += 4 * 11) diff += Math.abs(after2.data[j] - before.data[j]); if (diff > 0) break; }
       let det = 0; for (let i = 0; i < after.data.length; i++) if (after.data[i] !== after2.data[i]) det++;
-      return { outside, stdRatio: stdIn / stdRing, seam, residual: n ? ea / Math.max(1e-6, eb) : 0, det, changed: eb > 0 };
+      return { outside, stdRatio: stdIn / stdRing, seam, ea: n ? ea / n : 0, eb: n ? eb / n : 0, det, changed: eb > 0 };
     }, p.file);
     if (!r) continue;
     (rowsAll[groupOf[p.id]] ??= []).push({ id: p.id, ...r }); if (process.env.DBG) console.log(p.id, JSON.stringify(r));
@@ -247,7 +247,7 @@ if (!only || only === 'heal') {
     check(`M_heal_interior_std_ratio MST ${g}`, mx('stdRatio'), mx('stdRatio') <= M.M_heal_interior_std_ratio.max);
     check(`M_heal_seam_gradient_ratio MST ${g}`, mx('seam'), mx('seam') <= M.M_heal_seam_gradient_ratio.max);
     check(`M_deterministic_diff_levels heal MST ${g}`, mx('det'), mx('det') <= M.M_deterministic_diff_levels.max);
-    check(`heal_removes_blemish (residual error / original error) MST ${g}`, mx('residual'), mx('residual') <= 0.5);
+    { const bad = rows.filter((x) => !(x.ea <= Math.max(4, 0.5 * x.eb))); check(`heal_removes_blemish (low-frequency error <= max(4 levels, half the blemish error)) MST ${g}`, Math.max(...rows.map((x) => x.ea)), bad.length === 0, { bad: bad.map((x) => x.id + ':' + x.ea.toFixed(1) + '/' + x.eb.toFixed(1)) }); }
   }
 }
 

@@ -11,3 +11,6 @@ float rs = uRange * clamp(dot(c0, vec3(0.2126, 0.7152, 0.0722)) / 0.5, 0.5, 1.5)
 ```
 
 Measure with `node tests/browser/tools.mjs smooth` (about 12 minutes); keep it only if every group still passes and the parity checks improve.
+
+## Result (run 3)
+Applied and measured: blemish parity improved (30% -> 25%) but detail-retention-max parity got worse (24% -> 26%; MST 1-2 retained 0.99). Reverted. Parity still open; the dark-skin bias hypothesis is not the main cause. Next idea: normalise the smoothing amount per face by its measured band-pass texture energy (adaptive strength), or report parity as informational because the photos differ in resolution and noise per group.
