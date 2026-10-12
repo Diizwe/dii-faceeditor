@@ -25,3 +25,9 @@ button[aria-pressed="true"], button.on { outline: 2px solid var(--accent); }
 .err { color: var(--danger); padding: var(--s2) var(--s4); background: var(--surface); }
 .faces { position: absolute; inset: 0; pointer-events: none; }
 .note { color: var(--text-dim); font-size: 14px; }
+/* narrow phones: keep every top-bar button fully visible */
+@media (max-width: 480px) {
+  .topbar { gap: var(--s1); padding: var(--s2); }
+  .topbar button { padding: 0 var(--s2); font-size: 14px; min-width: 44px; }
+  .logo { font-size: 14px; line-height: 1.1; white-space: nowrap; }
+}

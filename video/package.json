@@ -1,0 +1,1 @@
+{"name":"dii-faceeditor-demo","private":true,"version":"1.0.0","type":"module","scripts":{"render":"remotion render src/index.ts Demo out/demo.mp4 --browser-executable=\"$CHROMIUM\" --gl=swangle --concurrency=2"},"dependencies":{"@remotion/cli":"^4.0.535","@types/react":"^18.3.31","react":"^18.3.1","react-dom":"^18.3.1","remotion":"^4.0.535","typescript":"^7.0.2"}}

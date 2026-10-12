@@ -1,0 +1,31 @@
+// Captures app screenshots for the demo video (iPhone 13 Pro Max emulation, software WebGL2). Run from the repo root after `npm run build`.
+import path from 'node:path';
+import { serve, launch } from '../tests/browser/lib.mjs';
+const root = path.resolve(import.meta.dirname, '..');
+const out = path.join(root, 'video/public/shots');
+const { server, port } = await serve(path.join(root, 'dist'), { mounts: { '/testdata/': path.join(root, 'testdata') } });
+const browser = await launch();
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2.77, isMobile: true, hasTouch: true });
+const page = await ctx.newPage();
+await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+await page.evaluate(() => localStorage.setItem('dii-onboarded', '1'));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('[data-testid=choose]');
+await page.screenshot({ path: path.join(out, '01-start.png') });
+await page.setInputFiles('[data-testid=file]', path.join(root, 'testdata/photos/p21.jpg'));
+await page.waitForSelector('[data-testid=canvas]');
+const wait = (ms) => page.waitForTimeout(ms);
+await wait(1500);
+await page.click('[data-testid=tool-faces]');
+for (let i = 0; i < 300; i++) { const n = await page.evaluate(() => window.__diiTest.store.getState().faces?.length); if (n) break; await wait(200); }
+await wait(800); await page.screenshot({ path: path.join(out, '02-faces.png') });
+const op = (tool, params) => page.evaluate(({ tool, params }) => { const s = window.__diiTest.store.getState(); s.edit({ tool, params: { ...params, face: s.activeFace } }); }, { tool, params });
+const reset = () => page.evaluate(() => window.__diiTest.store.setState({ history: { ops: [], ptr: 0, open: null } }));
+await page.click('[data-testid=tool-smooth]'); await op('smooth', { strength: 60, soften: 30 }); await wait(2500); await page.screenshot({ path: path.join(out, '03-smooth.png') });
+await reset(); await page.click('[data-testid=tool-light]'); await op('light', { exposure: 0.35, contrast: 15, warmth: 20, saturation: 10 }); await wait(1200); await page.screenshot({ path: path.join(out, '04-light.png') });
+await reset(); await page.click('[data-testid=tool-reshape]'); await op('reshape', { jaw: 30, chin: 0, noseW: 20, noseL: 0, eyeSize: 25, eyeDist: 0, lips: 0, faceW: 20 }); await wait(1800); await page.screenshot({ path: path.join(out, '05-reshape.png') });
+await reset(); await page.click('[data-testid=tool-makeup]'); await op('makeup', { lip: 28, blush: 20, brow: 20, colour: 1 }); await wait(1800); await page.screenshot({ path: path.join(out, '06-makeup.png') });
+await reset(); await page.click('[data-testid=tool-filters]'); await op('filters', { look: 4, strength: 55 }); await wait(1500); await page.screenshot({ path: path.join(out, '07-filters.png') });
+await reset(); await page.click('[data-testid=tool-light]'); await op('light', { exposure: 0.2, contrast: 10, warmth: 10, saturation: 10 }); await op('smooth', { strength: 40, soften: 30 }); await wait(2500);
+await page.click('[data-testid=split]'); await wait(800); await page.screenshot({ path: path.join(out, '08-compare.png') });
+await browser.close(); server.close(); console.log('shots done');
