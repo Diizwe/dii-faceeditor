@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-7",
-    "acquired_at": "2026-10-12T09:57:58.023219+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -148,7 +148,7 @@
     {
       "id": "3.2",
       "title": "Makeup (lip, blush, brow)",
-      "status": "todo"
+      "status": "done: luma correlation >= 0.99, outside-mask 0, clipping 0, all groups (11-photo subset x 5 lip colours); visual rubric not yet scored"
     },
     {
       "id": "3.3",

@@ -1,5 +1,5 @@
 import { Renderer, type Plan } from '../gl/renderer';
-import { rasterMask, rasterTeeth, rasterIris } from './facemask';
+import { rasterMask, rasterTeeth, rasterIris, rasterMakeup } from './facemask';
 import { skinStats } from './skin';
 import type { EditState } from './edit';
 import { buildPatches, applyPatches, type HealOp, type Patch } from './healer';
@@ -30,7 +30,7 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   const m = outToSource(o.geometry, img.width, img.height, outW, outH);
   const canvas = new OffscreenCanvas(16, 16);
   const r = o.renderer ?? new Renderer(canvas, { colorSpace: img.colorMode, maxTextureSize: o.maxTextureSize ?? 4096 });
-  const E = o.edit, hasPasses = !!(E && (E.smooth || E.light || E.whiten || E.eyes || E.filter));
+  const E = o.edit, hasPasses = !!(E && (E.smooth || E.light || E.whiten || E.eyes || E.filter || E.makeup));
   let T = o.tile ?? (hasPasses ? 1024 : 2048);
   const k = img.previewScale;
   const fwFull = E?.face ? E.face.box[2] / k : 0; // face width in full-resolution px: every radius is a multiple of it
@@ -84,12 +84,12 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
             const rb = bbox(rx0, ry0, rw, rh);
             const bmp2 = await crop(rb);
             const rm: Affine = [m[0], m[1], m[0] * rx0 + m[1] * ry0 + m[2] - rb.x0, m[3], m[4], m[3] * rx0 + m[4] * ry0 + m[5] - rb.y0];
-            const plan: Plan = { m: rm, w: rw, h: rh, light: E!.light, smooth: E!.smooth, whiten: E!.whiten, eyes: E!.eyes, filter: E!.filter, face: null };
+            const plan: Plan = { m: rm, w: rw, h: rh, light: E!.light, smooth: E!.smooth, whiten: E!.whiten, eyes: E!.eyes, filter: E!.filter, makeup: E!.makeup, face: null };
             if (E!.face && skin) {
               // mesh (preview px) -> full-res source px -> output px -> region px
               const toRegion = (x: number, y: number): [number, number] => { const [ox, oy] = apply(outSrcToOut, x / k, y / k); return [ox - rx0, oy - ry0]; };
               const mesh = E!.face.mesh as [number, number, number][];
-              plan.face = { mask: rasterMask(mesh, rw, rh, toRegion), teeth: E!.whiten ? rasterTeeth(mesh, rw, rh, toRegion) : null, iris: E!.eyes ? rasterIris(mesh, rw, rh, toRegion) : null, maskKey: `${tx},${ty}`, fw: fwFull * (outW / outputSizeSrcW), skin };
+              plan.face = { mask: rasterMask(mesh, rw, rh, toRegion), teeth: E!.whiten ? rasterTeeth(mesh, rw, rh, toRegion) : null, iris: E!.eyes ? rasterIris(mesh, rw, rh, toRegion) : null, makeup: E!.makeup ? rasterMakeup(mesh, fwFull, rw, rh, toRegion) : null, maskKey: `${tx},${ty}`, fw: fwFull * (outW / outputSizeSrcW), skin };
             }
             px = r.renderRegionPixels(bmp2, plan, { x: tx - rx0, y: ty - ry0, w: tw, h: th });
             peak = Math.max(peak, bmp2.width * bmp2.height * 4 + rw * rh * 16 * 5);

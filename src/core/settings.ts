@@ -2,6 +2,9 @@
 export interface Control { tool: string; id: string; label: string; min: number; max: number; step: number; default: number; unit?: string; }
 
 export const CONTROLS: Control[] = [
+  { tool: 'makeup', id: 'lip', label: 'Lip tint', min: 0, max: 60, step: 1, default: 24 },
+  { tool: 'makeup', id: 'blush', label: 'Blush', min: 0, max: 60, step: 1, default: 20 },
+  { tool: 'makeup', id: 'brow', label: 'Brow fill', min: 0, max: 60, step: 1, default: 20 },
   { tool: 'filters', id: 'strength', label: 'Strength', min: 0, max: 100, step: 1, default: 40 },
   { tool: 'whiten', id: 'strength', label: 'Whiten', min: 0, max: 100, step: 1, default: 40 },
   { tool: 'eyes', id: 'brighten', label: 'Brighten iris', min: 0, max: 100, step: 1, default: 30 },
@@ -15,6 +18,7 @@ export const CONTROLS: Control[] = [
   { tool: 'light', id: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1, default: 0 },
 ];
 
+export const LIP_COLOURS: { name: string; rgb: [number, number, number] }[] = [{ name: 'Rose', rgb: [0.78, 0.33, 0.45] }, { name: 'Coral', rgb: [0.93, 0.45, 0.38] }, { name: 'Berry', rgb: [0.55, 0.15, 0.32] }, { name: 'Nude', rgb: [0.76, 0.52, 0.45] }, { name: 'Red', rgb: [0.78, 0.1, 0.15] }];
 export const FILTER_LOOKS = ['Natural boost', 'Warm glow', 'Cool', 'Matte', 'Film', 'Mono', 'Vivid', 'Soft pastel'];
 export const controlsOf = (tool: string) => CONTROLS.filter((c) => c.tool === tool);
 export const defaultsOf = (tool: string): Record<string, number> => Object.fromEntries(controlsOf(tool).map((c) => [c.id, c.default]));

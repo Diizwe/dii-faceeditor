@@ -419,6 +419,36 @@ if (!only || only === 'filters') {
   }
 }
 
+if (!only || only === 'makeup') {
+  const M = T.metrics; const subset = manifest.filter((p, i) => i % 3 === 0); const rowsAll = {};
+  for (const p of subset) {
+    const r = await page.evaluate(async (file) => {
+      const f = await window.H.setFace(file); if (!f) return null;
+      const base = await window.H.toolFrame(null, null);
+      const out = [];
+      for (const colour of [0, 1, 2, 3, 4]) {
+        const fr = await window.H.toolFrame('makeup', { lip: 24, blush: 20, brow: 20, colour }); const mk = window.__dii.renderer.readMask('makeup'); if (!mk) return null;
+        const N = base.w * base.h; const sel = []; let outside = 0, clip = 0;
+        for (let i = 0; i < N; i++) { const v = Math.max(mk.data[i * 4], mk.data[i * 4 + 1], mk.data[i * 4 + 2]); if (v >= 0.5) sel.push(i);
+          for (let c = 0; c < 3; c++) { const d = Math.abs(fr.data[i * 4 + c] - base.data[i * 4 + c]) * 255; if (v === 0 && d > 1) { outside++; break; } if ((fr.data[i * 4 + c] >= 1 && base.data[i * 4 + c] < 1) || (fr.data[i * 4 + c] <= 0 && base.data[i * 4 + c] > 0)) clip++; } }
+        if (sel.length < 30) { out.push({ colour, skip: true }); continue; }
+        const L = (a, i) => 0.2126 * a.data[i * 4] + 0.7152 * a.data[i * 4 + 1] + 0.0722 * a.data[i * 4 + 2];
+        let ma = 0, mb = 0; for (const i of sel) { ma += L(base, i); mb += L(fr, i); } ma /= sel.length; mb /= sel.length;
+        let cov = 0, va = 0, vb = 0; for (const i of sel) { const a = L(base, i) - ma, b = L(fr, i) - mb; cov += a * b; va += a * a; vb += b * b; }
+        out.push({ colour, corr: cov / Math.sqrt(Math.max(1e-12, va * vb)), outside, clip: clip / (N * 3), n: sel.length });
+      }
+      return out;
+    }, p.file);
+    if (!r) continue; (rowsAll[groupOf[p.id]] ??= []).push(...r.filter((x) => !x.skip).map((x) => ({ id: p.id, ...x }))); if (process.env.DBG) console.log(p.id, JSON.stringify(r.map((x) => x.corr && +x.corr.toFixed(3))));
+  }
+  for (const [g, rows] of Object.entries(rowsAll)) {
+    const mn = Math.min(...rows.map((x) => x.corr)), mxo = Math.max(...rows.map((x) => x.outside)), mc = Math.max(...rows.map((x) => x.clip));
+    check(`M_makeup_luma_correlation MST ${g}`, mn, mn >= M.M_makeup_luma_correlation.min, { n: rows.length });
+    check(`M_outside_mask_changed_px makeup MST ${g}`, mxo, mxo <= 0);
+    check(`M_clipped_px_increase makeup MST ${g}`, mc, mc <= M.M_clipped_px_increase.max);
+  }
+}
+
 check('no_page_errors', errs.slice(0, 3), errs.length === 0);
 await browser.close(); server.close();
 fs.writeFileSync('/tmp/tools-report.json', JSON.stringify(results, null, 1));

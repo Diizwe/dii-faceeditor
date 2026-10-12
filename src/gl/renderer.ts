@@ -197,6 +197,24 @@ void main(){
   o = vec4(clamp(m, 0.0, 1.0), 1.0);
 }`;
 
+// Makeup: lips and blush shift chroma towards a colour while keeping each pixel's own luma (texture survives); brows darken multiplicatively.
+const MAKEUP = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform sampler2D uMask; uniform vec3 uLip; uniform vec3 uBlush; uniform vec3 uOp; // lip, blush, brow opacity 0..1
+out vec4 o;
+vec3 toward(vec3 c, vec3 t, float k){ float y = dot(c, vec3(0.2126, 0.7152, 0.0722)); float yt = dot(t, vec3(0.2126, 0.7152, 0.0722)); vec3 target = y + (t - yt); return mix(c, clamp(target, 0.0, 1.0), k); }
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c = texelFetch(uTex, p, 0).rgb;
+  vec3 m = clamp(texelFetch(uMask, p, 0).rgb, 0.0, 1.0);
+  if (m.r + m.g + m.b <= 0.0) { o = vec4(c, 1.0); return; }
+  vec3 r = c;
+  r = toward(r, uLip, m.r * uOp.x * 1.4);
+  r = toward(r, uBlush, m.g * uOp.y * 0.9 * (1.0 - 0.0));
+  r = r * (1.0 - m.b * uOp.z * 0.6);
+  o = vec4(clamp(r, 0.0, 1.0), 1.0);
+}`;
+
 const PRESENT = `#version 300 es
 precision highp float;
 uniform sampler2D uTexB; uniform float uSplit;
@@ -218,13 +236,14 @@ void main(){
 export interface View { zoom: number; panX: number; panY: number; }
 export interface LightParams { exposure: number; contrast: number; warmth: number; saturation: number; } // UI ranges: EV -2..2, others -100..100
 export interface FaceMask {
+  makeup?: HTMLCanvasElement | OffscreenCanvas | null;
   teeth?: HTMLCanvasElement | OffscreenCanvas | null; iris?: HTMLCanvasElement | OffscreenCanvas | null; // hard rasters sharing maskKey
   mask: HTMLCanvasElement | OffscreenCanvas; maskKey: string; // hard mask raster at work size; key changes when it changes
   fw: number; // face width in work px: all radii are multiples of this
   skin: { cb: number; cr: number; tol: number };
 }
 export interface SmoothParams { strength: number; keep: number } // 0..100
-export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; }
+export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; makeup?: { lip: [number, number, number]; lipOp: number; blushOp: number; browOp: number } | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -338,7 +357,7 @@ export class Renderer {
     for (const [n, v] of Object.entries(uni)) {
       const loc = gl.getUniformLocation(pr, n); if (!loc) continue;
       if (typeof v === 'number') (n === 'uRadius' ? gl.uniform1i(loc, v) : gl.uniform1f(loc, v));
-      else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]); else if (v.length === 4) gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
+      else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]); else if (v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]); else if (v.length === 4) gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -374,16 +393,17 @@ export class Renderer {
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = this.work;
-    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter) return;
+    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter && !plan.makeup) return;
     this.edited ??= this.target(w, h, true, true);
     let cur: Target = this.work;
     const flip = this.temp(3, w, h, true);
     const next = (): Target => (cur === this.edited ? flip : this.edited!);
     const face = plan.face ?? null;
-    if (face && (plan.smooth || plan.light || plan.whiten || plan.eyes || plan.filter)) {
+    if (face && (plan.smooth || plan.light || plan.whiten || plan.eyes || plan.filter || plan.makeup)) {
       const feather = Math.max(2, 0.015 * face.fw) / 2;
       this.ensureMask('face', face.mask, face.maskKey, feather, w, h);
       if (plan.whiten && face.teeth) this.ensureMask('teeth', face.teeth, face.maskKey, feather, w, h);
+      if (plan.makeup && face.makeup) this.ensureMask('makeup', face.makeup, face.maskKey, feather * 0.5, w, h);
       if (plan.eyes && face.iris) this.ensureMask('iris', face.iris, face.maskKey, feather * 0.6, w, h);
     }
     if (plan.smooth && face && this.maskTex) {
@@ -406,6 +426,11 @@ export class Renderer {
       const t1 = this.temp(0, w, h), t3 = this.temp(2, w, h), dst = next();
       this.blur(cur, t3, t1, Math.max(1, 0.012 * face.fw), 0);
       this.pass('eyes', EYES, dst, { uTex: cur.tex, uBlur: t3.tex, uMask: this.masks.get('iris')!.t.tex }, { uP: [plan.eyes.brighten / 100, plan.eyes.clarity / 100] });
+      cur = dst;
+    }
+    if (plan.makeup && face && this.masks.get('makeup')) {
+      const dst = next(), mk = plan.makeup;
+      this.pass('makeup', MAKEUP, dst, { uTex: cur.tex, uMask: this.masks.get('makeup')!.t.tex }, { uLip: [...mk.lip] as number[], uBlush: [0.93, 0.45, 0.45], uOp: [mk.lipOp, mk.blushOp, mk.browOp] } as never);
       cur = dst;
     }
     if (plan.light) {
