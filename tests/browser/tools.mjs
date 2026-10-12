@@ -378,7 +378,7 @@ if (only === 'sheets') {
     liquify: { tool: 'liquify', params: { rel: true }, label: 'Liquify: push jaw in, bloat eyes' },
     background: { tool: 'background', params: { mode: 0, blur: 70, edge: 40, colour: 0 }, label: 'Background blur 70', bg: true },
     backgroundSage: { tool: 'background', params: { mode: 1, blur: 0, edge: 40, colour: 3 }, label: 'Background replace: sage', bg: true } };
-  for (const [name, spec] of Object.entries(tools)) {
+  for (const [name, spec] of Object.entries(tools).filter(([n]) => !process.env.SHEET_TOOLS || process.env.SHEET_TOOLS.split(',').includes(n))) {
     const tiles = [];
     for (const id of ids) {
       const p = manifest.find((m) => m.id === id) ?? JSON.parse(fs.readFileSync(path.join(root, 'testdata/manifest.json'), 'utf8')).photos.find((m) => m.id === id);
