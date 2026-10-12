@@ -98,3 +98,8 @@ Per the plan's rule (a task failing its gate 3 times is cut to its simplest work
 ## Run 9 (2026-10-12 10:30Z)
 - Reviewer rescore: Reshape 4.08 (pass; MST 5-6 only 3.5, residue at shoulder/collar on p14), Makeup 3.17 (fail again: cool-pink blobs with hard edges, lip line touching teeth, brows invisible or grey). Reworked Makeup: blush is a multiply (keeps undertone and texture) with a larger feather, bigger and more cheekbone-centred; lips are gated off bright (teeth) pixels; brow fill follows the hair and is stronger. Objective checks still pass; rescore next run.
 - Liquify core written and unit-tested (push, pucker, bloat, reconstruct brushes with compact support, Jacobian guard, deterministic); renderer, UI and export integration are next.
+
+## Run 10 (2026-10-12 10:46Z): Liquify integrated, Phase 3 closed with exceptions
+- Liquify: renderer warp pass shared with Reshape (non-square grids), brush UI (push, pucker, bloat, reconstruct; size 2-25% of short side, strength 30 default), stroke replay at export from one whole-image grid so tiles match the preview (parity mean 0.01-0.02 levels, SSIM >= 0.9994).
+- Reviewer rescore: Makeup 3.6 (up from 3.17), Liquify 3.5. Per the three-attempts rule both ship with documented gaps: lip and brow changes are weak on dark skin, blush can read strong on deep-warm skin, Liquify strength is not equally visible across photos and a large brush near clothing edges tears. Last Makeup tuning (stronger lip/brow, less red blush) keeps the objective checks passing and was not rescored.
+- Phase 3 is closed with exceptions. Phase 4 (Background, Object erase) starts next run.

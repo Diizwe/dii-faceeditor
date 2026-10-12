@@ -211,11 +211,11 @@ void main(){
   vec3 r = c;
   float yc = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float notTeeth = 1.0 - smoothstep(0.55, 0.75, yc);                    // bright pixels inside the lip mask are teeth or highlights: left alone
-  r = toward(r, uLip, m.r * notTeeth * uOp.x * 1.4);
+  r = toward(r, uLip, clamp(m.r * notTeeth * uOp.x * 2.0, 0.0, 0.9));
   float skinM = clamp(texelFetch(uSkin, p, 0).r, 0.0, 1.0);          // blush only lands on skin, and as a multiply so the skin's own undertone and texture stay
-  r *= 1.0 + m.g * m.g * skinM * uOp.y * 1.1 * (vec3(1.10, 0.86, 0.90) - 1.0);
+  r *= 1.0 + m.g * m.g * skinM * uOp.y * 1.1 * (vec3(1.08, 0.90, 0.93) - 1.0);
   float dark = 1.0 - smoothstep(0.1, 0.6, yc);                       // brow fill follows the hair: darker pixels darken more
-  r *= 1.0 - m.b * (0.35 + 0.65 * dark) * uOp.z * 1.6;
+  r *= 1.0 - clamp(m.b * (0.5 + 0.5 * dark) * uOp.z * 2.4, 0.0, 0.7);
   o = vec4(clamp(r, 0.0, 1.0), 1.0);
 }`;
 
