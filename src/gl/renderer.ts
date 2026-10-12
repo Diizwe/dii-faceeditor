@@ -104,7 +104,7 @@ void main(){
   float cb = -0.168736*c.r - 0.331264*c.g + 0.5*c.b, cr = 0.5*c.r - 0.418688*c.g - 0.081312*c.b;
   float d = length(vec2(cb - uP.z, cr - uP.w)) / uTol;
   float skin = 1.0 - smoothstep(1.4, 3.0, d);
-  float w = clamp(m, 0.0, 1.0) * skin * uP.x;
+  float w = clamp(m, 0.0, 1.0) * skin * uP.x * 0.85; // 15% of the original always stays: no porcelain skin
   vec3 sm = texelFetch(uBase, p, 0).rgb + (c - texelFetch(uFine, p, 0).rgb) * uP.y;
   // never leave the local range of the original (5x5): smoothing may only move a pixel towards its neighbours, so no halo can appear
   vec3 lo = c, hi = c; ivec2 lim = textureSize(uOrig, 0) - 1;
@@ -114,10 +114,10 @@ void main(){
   vec3 mixed = mix(c, sm, w);
   float y0 = dot(c, vec3(0.2126, 0.7152, 0.0722)), y1 = dot(mixed, vec3(0.2126, 0.7152, 0.0722));
   vec3 d0 = c - y0, d1 = mixed - y1;
-  float kk = length(d1) / max(length(d0), 1e-5);
+  float kk = mix(1.0, length(d1) / max(length(d0), 1e-5), 0.5); // half the chroma change: smoothing must not wash skin out or turn it pink
   vec3 room = mix(y1 / max(-d0, vec3(1e-6)), (1.0 - y1) / max(d0, vec3(1e-6)), step(0.0, d0));
   vec3 locked = y1 + d0 * min(kk, min(room.r, min(room.g, room.b)));
-  o = vec4(clamp(mix(mixed, locked, 0.6 * clamp(m, 0.0, 1.0) * skin * step(0.0001, uP.x)), 0.0, 1.0), 1.0);
+  o = vec4(clamp(mix(mixed, locked, 0.85 * clamp(m, 0.0, 1.0) * skin * step(0.0001, uP.x)), lo, hi), 1.0);
 }`;
 
 // Whiten: inside the feathered mouth mask, only bright, yellow-hued pixels move: chroma shrinks and luma lifts a little.
@@ -134,11 +134,11 @@ void main(){
   float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), dd = mx - mn;
   float hue = 0.0;
   if (dd > 1e-4) hue = (mx == c.r ? mod((c.g - c.b) / dd, 6.0) : mx == c.g ? (c.b - c.r) / dd + 2.0 : (c.r - c.g) / dd + 4.0) * 60.0;
-  float yellow = smoothstep(20.0, 35.0, hue) * (1.0 - smoothstep(80.0, 95.0, hue)) * smoothstep(0.06, 0.14, dd / max(mx, 1e-4));
+  float yellow = smoothstep(12.0, 28.0, hue) * (1.0 - smoothstep(100.0, 120.0, hue)) * smoothstep(0.04, 0.10, dd / max(mx, 1e-4));
   float bright = smoothstep(0.32, 0.5, Y);   // gums, lips and shadow inside the mouth are dark or red and stay untouched
   float w = clamp(m, 0.0, 1.0) * yellow * bright * uS;
   // chroma shrinks fast at low strength and saturates at 65%, so even at 100 the teeth keep a warm tint instead of turning grey
-  vec3 d = (c - Y) * (1.0 - 0.65 * (1.0 - (1.0 - w) * (1.0 - w)));
+  vec3 d = (c - Y) * (1.0 - 0.72 * (1.0 - (1.0 - w) * (1.0 - w)));
   float Y2 = Y + 0.10 * w * (1.0 - Y);
   o = vec4(clamp(Y2 + d, 0.0, 1.0), 1.0);
 }`;
@@ -154,7 +154,7 @@ void main(){
   float m = clamp(texelFetch(uMask, p, 0).r, 0.0, 1.0);
   if (m <= 0.0) { o = vec4(c, 1.0); return; }
   vec3 b = texelFetch(uBlur, p, 0).rgb;
-  vec3 e = c + (c - b) * (1.0 * uP.y);
+  vec3 e = c + clamp((c - b) * uP.y, vec3(-0.08), vec3(0.08)); // bounded local contrast: no black pupil dots
   float Y = dot(e, vec3(0.2126, 0.7152, 0.0722));
   e += uP.x * 0.10 * (1.0 - Y) * (0.4 + Y);
   o = vec4(clamp(mix(c, e, m), 0.0, 1.0), 1.0);
