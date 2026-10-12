@@ -12,6 +12,8 @@ interface State {
   error: string | null;
   busy: string | null;
   compare: boolean;
+  liq: { mode: 'push' | 'pucker' | 'bloat' | 'reconstruct'; size: number; strength: number };
+  setLiq(v: Partial<{ mode: 'push' | 'pucker' | 'bloat' | 'reconstruct'; size: number; strength: number }>): void;
   healPct: number; // heal brush radius, % of the short side
   setHealPct(v: number): void;
   split: boolean; // drag-split compare mode
@@ -32,7 +34,7 @@ interface State {
 }
 
 export const useStore = create<State>((set) => ({
-  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, healPct: 2, setHealPct: (healPct) => set({ healPct }), split: false, setSplit: (split) => set({ split }), faces: null, activeFace: null,
+  image: null, history: emptyHistory(), tool: 'crop', error: null, busy: null, compare: false, liq: { mode: 'push', size: 8, strength: 30 }, setLiq: (v) => set((s) => ({ liq: { ...s.liq, ...v } })), healPct: 2, setHealPct: (healPct) => set({ healPct }), split: false, setSplit: (split) => set({ split }), faces: null, activeFace: null,
   setFaces: (faces) => set({ faces, activeFace: faces && faces.length === 1 ? faces[0].id : null }),
   setActiveFace: (activeFace) => set({ activeFace }),
   setImage: (image) => set({ image, history: emptyHistory(), error: null, faces: null, activeFace: null }),

@@ -184,6 +184,7 @@ if (!only || only === 'parity') {
     light: [{ tool: 'light', params: { exposure: 0.4, contrast: 25, warmth: 30, saturation: 20 } }],
     reshape: [{ tool: 'reshape', params: { jaw: 60, chin: 40, noseW: 50, noseL: 30, eyeSize: 40, eyeDist: 20, lips: 40, faceW: 50 } }],
     makeupfilter: [{ tool: 'makeup', params: { lip: 30, blush: 25, brow: 25, colour: 1, face: null } }, { tool: 'filters', params: { look: 4, strength: 50 } }],
+    liquify: [{ tool: 'liquify', params: { pts: [{ x: 500, y: 700 }, { x: 560, y: 720 }, { x: 640, y: 740 }], r: 110, strength: 70, mode: 'push' } }, { tool: 'liquify', params: { pts: [{ x: 700, y: 560 }], r: 90, strength: 60, mode: 'bloat' } }, { tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 3, aspect: 0.85 } }],
     combo: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 6, aspect: 0.8 } }, { tool: 'smooth', params: { strength: 40, soften: 30, face: null } }, { tool: 'light', params: { exposure: -0.2, contrast: 10, warmth: -20, saturation: 10 } }],
   };
   const M = T.metrics;

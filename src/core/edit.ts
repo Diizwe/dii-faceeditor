@@ -4,6 +4,8 @@ import { latest } from './history';
 import { defaultsOf, LIP_COLOURS } from './settings';
 import type { Face } from './faces';
 import type { LightParams } from '../gl/renderer';
+import type { LiquifyStroke } from './liquify';
+import { active } from './history';
 import { isReshapeIdentity, zeroReshape, type ReshapeParams } from './reshape';
 
 export interface SmoothOp { strength: number; soften: number; face: number | null }
@@ -15,6 +17,7 @@ export interface EditState {
   eyes: { brighten: number; clarity: number } | null;
   filter: { look: number; strength: number } | null;
   reshape: ReshapeParams | null;
+  liquify: LiquifyStroke[]; // source-pixel strokes, in order
   makeup: { lip: [number, number, number]; lipOp: number; blushOp: number; browOp: number } | null;
   face: Face | null; // face whose mask drives Smooth and the skin protection in Light & colour
 }
@@ -41,6 +44,7 @@ export function editFrom(h: History, faces: Face[] | null, activeFace: number | 
     smooth: face && sm.strength > 0 ? { strength: sm.strength, keep: 100 - sm.soften } : null,
     whiten: face && wh.strength > 0 ? { strength: wh.strength } : null,
     eyes: face && (ey.brighten > 0 || ey.clarity > 0) ? { brighten: ey.brighten, clarity: ey.clarity } : null,
+    liquify: active(h).filter((o) => o.tool === 'liquify').map((o) => o.params as LiquifyStroke),
     reshape: face && !isReshapeIdentity(rs) ? rs : null,
     makeup: face && (mu.lip > 0 || mu.blush > 0 || mu.brow > 0) ? { lip: LIP_COLOURS[mu.colour]?.rgb ?? LIP_COLOURS[0].rgb, lipOp: mu.lip / 100, blushOp: mu.blush / 100, browOp: mu.brow / 100 } : null,
     filter: fl.strength > 0 ? { look: fl.look, strength: fl.strength } : null,

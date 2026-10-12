@@ -222,14 +222,14 @@ void main(){
 // Reshape warp, applied last on the retouched frame: out(p) = in(p + B(p)) with B from a coarse grid (zero outside it).
 const WARP = `#version 300 es
 precision highp float;
-uniform sampler2D uTex; uniform sampler2D uField; uniform vec4 uBox; uniform float uG;
+uniform sampler2D uTex; uniform sampler2D uField; uniform vec4 uBox; uniform vec2 uG;
 out vec4 o;
 void main(){
   vec2 p = gl_FragCoord.xy;
   vec2 uv = (p - uBox.xy) / (uBox.zw - uBox.xy);
   vec2 sz = vec2(textureSize(uTex, 0));
   vec2 b = vec2(0.0);
-  if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) b = texture(uField, (uv * (uG - 1.0) + 0.5) / uG).rg;
+  if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) b = texture(uField, (uv * (uG - vec2(1.0)) + vec2(0.5)) / uG).rg;
   o = vec4(texture(uTex, (p + b) / sz).rgb, 1.0);
 }`;
 
@@ -261,7 +261,7 @@ export interface FaceMask {
   skin: { cb: number; cr: number; tol: number };
 }
 export interface SmoothParams { strength: number; keep: number } // 0..100
-export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; makeup?: { lip: [number, number, number]; lipOp: number; blushOp: number; browOp: number } | null; warp?: { field: { G: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; }
+export interface Plan { m: Affine; w: number; h: number; face?: FaceMask | null; smooth?: SmoothParams | null; whiten?: { strength: number } | null; eyes?: { brighten: number; clarity: number } | null; light?: LightParams | null; filter?: { look: number; strength: number } | null; makeup?: { lip: [number, number, number]; lipOp: number; blushOp: number; browOp: number } | null; warp?: { field: { G: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; liquify?: { grid: { Gx: number; Gy: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }; key: string } | null; }
 
 export interface RendererOptions { colorSpace?: 'srgb' | 'display-p3'; maxTextureSize?: number; }
 
@@ -357,7 +357,6 @@ export class Renderer {
   }
 
   private extra: Target[] = [];
-  private fieldTex: WebGLTexture | null = null; private fieldKey = '';
   private masks = new Map<string, { key: string; t: Target }>();
   private get maskTex(): Target | null { return this.masks.get('face')?.t ?? null; }
   private progs = new Map<string, WebGLProgram>();
@@ -412,7 +411,7 @@ export class Renderer {
     this.runGeometry(plan.m, w, h, this.work);
     gl.bindTexture(gl.TEXTURE_2D, this.work.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = this.work;
-    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter && !plan.makeup && !plan.warp) return;
+    if (!plan.smooth && !plan.light && !plan.whiten && !plan.eyes && !plan.filter && !plan.makeup && !plan.warp && !plan.liquify) return;
     this.edited ??= this.target(w, h, true, true);
     let cur: Target = this.work;
     const flip = this.temp(3, w, h, true);
@@ -463,22 +462,24 @@ export class Renderer {
       this.pass('filter', FILTER, dst, { uTex: cur.tex, uMask: (this.maskTex ?? cur).tex }, { uLook: plan.filter.look, uS: plan.filter.strength / 100, uUseMask: useMask });
       cur = dst;
     }
-    if (plan.warp) {
-      const f = plan.warp.field, dst = next();
-      if (!this.fieldTex || this.fieldKey !== plan.warp.key) {
-        const gl2 = this.gl; if (this.fieldTex) gl2.deleteTexture(this.fieldTex);
-        this.fieldTex = gl2.createTexture()!; gl2.bindTexture(gl2.TEXTURE_2D, this.fieldTex);
-        gl2.pixelStorei(gl2.UNPACK_ALIGNMENT, 1);
-        gl2.texImage2D(gl2.TEXTURE_2D, 0, gl2.RG16F, f.G, f.G, 0, gl2.RG, gl2.FLOAT, f.data);
-        gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_MIN_FILTER, gl2.LINEAR); gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_MAG_FILTER, gl2.LINEAR);
-        gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_WRAP_S, gl2.CLAMP_TO_EDGE); gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_WRAP_T, gl2.CLAMP_TO_EDGE);
-        this.fieldKey = plan.warp.key;
-      }
-      this.pass('warp', WARP, dst, { uTex: cur.tex, uField: this.fieldTex }, { uBox: [f.x0, f.y0, f.x1, f.y1], uG: f.G });
-      cur = dst;
-    }
+    if (plan.warp) { const f = plan.warp.field, dst = next(); this.warpPass('reshape', { Gx: f.G, Gy: f.G, x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, data: f.data }, plan.warp.key, cur, dst); cur = dst; }
+    if (plan.liquify) { const dst = next(); this.warpPass('liquify', plan.liquify.grid, plan.liquify.key, cur, dst); cur = dst; }
     gl.bindTexture(gl.TEXTURE_2D, cur.tex); gl.generateMipmap(gl.TEXTURE_2D);
     this.out = cur;
+  }
+
+  private fields = new Map<string, { tex: WebGLTexture; key: string }>();
+  private warpPass(name: string, f: { Gx: number; Gy: number; x0: number; y0: number; x1: number; y1: number; data: Float32Array }, key: string, src: Target, dst: Target) {
+    const gl = this.gl; let e = this.fields.get(name);
+    if (!e || e.key !== key) {
+      if (e) gl.deleteTexture(e.tex);
+      const tex = gl.createTexture()!; gl.bindTexture(gl.TEXTURE_2D, tex); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, f.Gx, f.Gy, 0, gl.RG, gl.FLOAT, f.data);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      e = { tex, key }; this.fields.set(name, e);
+    }
+    this.pass('warp', WARP, dst, { uTex: src.tex, uField: e.tex }, { uBox: [f.x0, f.y0, f.x1, f.y1], uG: [f.Gx, f.Gy] });
   }
 
   private clearMasks() { for (const m of this.masks.values()) this.free(m.t); this.masks.clear(); }
@@ -553,7 +554,7 @@ export class Renderer {
     const prev = this.src, prevOut = this.out;
     this.src = this.uploadTexture(bmp);
     this.clearMasks(); // masks are per region
-    this.fieldKey = '';
+    for (const e of this.fields.values()) this.gl.deleteTexture(e.tex); this.fields.clear();
     this.renderWork(plan);
     const t = this.out!;
     const f = new Float32Array(inner.w * inner.h * 4);
@@ -578,5 +579,5 @@ export class Renderer {
   /** Read the presented canvas (tests). */
   readCanvas(w: number, h: number): Uint8Array { const o = new Uint8Array(w * h * 4); this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null); this.gl.readPixels(0, 0, w, h, this.gl.RGBA, this.gl.UNSIGNED_BYTE, o); return o; }
 
-  dispose() { if (this.fieldTex) this.gl.deleteTexture(this.fieldTex); this.free(this.work); this.free(this.edited); this.clearMasks(); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
+  dispose() { for (const e of this.fields.values()) this.gl.deleteTexture(e.tex); this.free(this.work); this.free(this.edited); this.clearMasks(); this.extra.forEach((t) => this.free(t)); if (this.src) this.gl.deleteTexture(this.src.tex); if (!(this.canvas instanceof HTMLCanvasElement)) this.gl.getExtension('WEBGL_lose_context')?.loseContext(); /* a DOM canvas may be reused by the next renderer, so its context must stay alive */ }
 }

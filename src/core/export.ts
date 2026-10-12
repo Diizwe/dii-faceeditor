@@ -3,6 +3,7 @@ import { rasterMask, rasterTeeth, rasterIris, rasterMakeup } from './facemask';
 import { skinStats } from './skin';
 import type { EditState } from './edit';
 import { buildField } from './reshape';
+import { buildLiquify } from './liquify';
 import { buildPatches, applyPatches, type HealOp, type Patch } from './healer';
 import { decodeFull, type LoadedImage } from './image';
 import { outToSource, outputSize, apply, invert, type Affine, type Geometry } from './geometry';
@@ -31,7 +32,7 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   const m = outToSource(o.geometry, img.width, img.height, outW, outH);
   const canvas = new OffscreenCanvas(16, 16);
   const r = o.renderer ?? new Renderer(canvas, { colorSpace: img.colorMode, maxTextureSize: o.maxTextureSize ?? 4096 });
-  const E = o.edit, hasPasses = !!(E && (E.smooth || E.light || E.whiten || E.eyes || E.filter || E.makeup || E.reshape));
+  const E = o.edit, hasPasses = !!(E && (E.smooth || E.light || E.whiten || E.eyes || E.filter || E.makeup || E.reshape || E.liquify.length > 0));
   let T = o.tile ?? (hasPasses ? 1024 : 2048);
   const k = img.previewScale;
   const fwFull = E?.face ? E.face.box[2] / k : 0; // face width in full-resolution px: every radius is a multiple of it
@@ -39,8 +40,11 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
   const basePad = E?.smooth || E?.face || E?.eyes ? Math.ceil(Math.max(3 * 0.012 * fwFull, 3 * Math.max(1, 0.015 * fwFull) / 2)) + 4 : 0;
   // the warp samples up to maxDisp px away, so tiles need that much extra context on top of the retouch support
   const warpPad = E?.reshape && E.face ? (() => { const mesh = (E.face.mesh as [number, number, number][]).map((p) => { const [x, y] = apply(invert(outToSource(o.geometry, img.width, img.height, outW, outH)), p[0] / img.previewScale, p[1] / img.previewScale); return [x, y, 0] as [number, number, number]; }); const f = buildField(mesh, fwFull, E.reshape); return f ? Math.ceil(f.maxDisp) + 4 : 0; })() : 0;
-  const pad = basePad + warpPad;
+  const liqR = E?.liquify.length ? Math.max(...E.liquify.map((q) => q.r)) : 0; // a liquify stroke moves content at most about one brush radius
+  const pad = basePad + warpPad + Math.ceil(liqR * 1.1);
   const margin = 2;
+  // liquify: one grid for the whole output (same cell count as the preview), reused by every region with its origin shifted, so tiles match the preview exactly
+  const liqGrid = E?.liquify.length ? (() => { const cell = 6 / k; const st = E.liquify.map((q) => ({ mode: q.mode, strength: q.strength, r: q.r, pts: q.pts.map((p) => { const [x, y] = apply(invert(outToSource(o.geometry, img.width, img.height, outW, outH)), p.x, p.y); return { x, y }; }) })); return buildLiquify(st, 0, 0, outW, outH, cell); })() : null;
   const skin = E?.face ? skinStats(img.preview, E.face.mesh as [number, number, number][], E.face.box[2]) : null;
   const full = await decodeFull(img);
   const patches: Patch[] = o.heal?.length ? buildPatches(full, o.heal, img.colorMode) : [];
@@ -100,6 +104,7 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
               const field = buildField(meshR, fwFull, E!.reshape);
               if (field) plan.warp = { field, key: `${tx},${ty}` };
             }
+            if (liqGrid) plan.liquify = { grid: { ...liqGrid, x0: liqGrid.x0 - rx0, x1: liqGrid.x1 - rx0, y0: liqGrid.y0 - ry0, y1: liqGrid.y1 - ry0 }, key: `${tx},${ty}` };
             px = r.renderRegionPixels(bmp2, plan, { x: tx - rx0, y: ty - ry0, w: tw, h: th });
             peak = Math.max(peak, bmp2.width * bmp2.height * 4 + rw * rh * 16 * 5);
             bmp2.close();

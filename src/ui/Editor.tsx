@@ -7,6 +7,8 @@ import { HealPanel } from './HealPanel';
 import { FilterPanel } from './FilterPanel';
 import { MakeupPanel } from './MakeupPanel';
 import { ReshapePanel } from './ReshapePanel';
+import { LiquifyPanel } from './LiquifyPanel';
+import { buildLiquify } from '../core/liquify';
 import { buildField } from '../core/reshape';
 import { PreviewHealer, healOps } from '../core/healer';
 import { active as activeOps } from '../core/history';
@@ -20,7 +22,7 @@ import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'reshape' | 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
+type Panel = 'liquify' | 'reshape' | 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -74,7 +76,14 @@ export function Editor() {
       const fwW = E.face.box[2] * Math.sqrt(Math.abs(inv2[0] * inv2[4] - inv2[1] * inv2[3])), field = buildField(mesh2, fwW, E.reshape);
       if (field) warp = { field, key: `${E.face.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}|${JSON.stringify(E.reshape)}` };
     }
-    return { w, h, warp, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, makeup: E.makeup, face, m: mm };
+    let liquify: { grid: NonNullable<ReturnType<typeof buildLiquify>>; key: string } | null = null;
+    if (E.liquify.length) {
+      const inv3 = invert(mm), sc = Math.sqrt(Math.abs(mm[0] * mm[4] - mm[1] * mm[3]));
+      const strokes = E.liquify.map((st) => ({ mode: st.mode, strength: st.strength, r: (st.r * k) / sc, pts: st.pts.map((q) => { const [x, y] = apply(inv3, q.x * k, q.y * k); return { x, y }; }) }));
+      const grid = buildLiquify(strokes, 0, 0, w, h, 6), last = E.liquify[E.liquify.length - 1];
+      if (grid) liquify = { grid, key: `${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}|${E.liquify.length}|${last.pts.length}|${last.pts[last.pts.length - 1].x.toFixed(1)}|${last.mode}` };
+    }
+    return { w, h, warp, liquify, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, makeup: E.makeup, face, m: mm };
   }, [E, image, k]);
 
   const [srcVersion, setSrcVersion] = useState(0);
@@ -151,9 +160,9 @@ export function Editor() {
     const { w, h } = sizeRef.current, dpr = window.devicePixelRatio || 1;
     if (o.width !== Math.round(w * dpr) || o.height !== Math.round(h * dpr)) { o.width = Math.round(w * dpr); o.height = Math.round(h * dpr); }
     const c = o.getContext('2d')!; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
-    if (panelRef.current === 'heal' && hover.current) {
+    if ((panelRef.current === 'heal' || panelRef.current === 'liquify') && hover.current) {
       const { m } = facesRef.current, v = view.current, sc = Math.sqrt(Math.abs(m[0] * m[4] - m[1] * m[3]));
-      const st = useStore.getState(), rSrc = (st.healPct / 100) * Math.min(st.image!.width, st.image!.height);
+      const st = useStore.getState(), rSrc = ((panelRef.current === 'liquify' ? st.liq.size : st.healPct) / 100) * Math.min(st.image!.width, st.image!.height);
       const rs = ((rSrc * st.image!.previewScale) / sc) * v.zoom;
       c.beginPath(); c.arc(hover.current.x, hover.current.y, Math.max(3, rs), 0, Math.PI * 2); c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
       c.beginPath(); c.arc(hover.current.x, hover.current.y, Math.max(3, rs) + 1.5, 0, Math.PI * 2); c.lineWidth = 1; c.strokeStyle = 'rgba(0,0,0,.6)'; c.stroke();
@@ -203,11 +212,11 @@ export function Editor() {
     let stroke: { x: number; y: number }[] | null = null;
     const toSrc = (cx: number, cy: number) => { const [px, py] = toSource(cx, cy); const k = useStore.getState().image!.previewScale; return { x: px / k, y: py / k }; };
     const onDown = (e: PointerEvent) => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); last = null; down = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
-      if (panelRef.current === 'heal') { const b = rect(); if (pts.size === 1) { stroke = [toSrc(e.clientX - b.left, e.clientY - b.top)]; hover.current = { x: e.clientX - b.left, y: e.clientY - b.top }; drawOverlay(); } else stroke = null; } };
+      if (panelRef.current === 'heal' || panelRef.current === 'liquify') { const b = rect(); if (pts.size === 1) { stroke = [toSrc(e.clientX - b.left, e.clientY - b.top)]; hover.current = { x: e.clientX - b.left, y: e.clientY - b.top }; drawOverlay(); } else stroke = null; } };
     const onMove = (e: PointerEvent) => {
       const p = pts.get(e.pointerId); if (!p) return;
       const b = rect();
-      if (panelRef.current === 'heal') { hover.current = { x: e.clientX - b.left, y: e.clientY - b.top }; drawOverlay(); }
+      if (panelRef.current === 'heal' || panelRef.current === 'liquify') { hover.current = { x: e.clientX - b.left, y: e.clientY - b.top }; drawOverlay(); }
       if (pts.size === 1 && stroke) { stroke.push(toSrc(e.clientX - b.left, e.clientY - b.top)); p.x = e.clientX; p.y = e.clientY; return; }
       if (pts.size === 1 && splitRef.current >= 0) {
         splitRef.current = Math.min(Math.max(e.clientX - b.left, 0), size.w); p.x = e.clientX; p.y = e.clientY; draw();
@@ -226,7 +235,10 @@ export function Editor() {
       }
     };
     const onUp = (e: PointerEvent) => {
-      if (stroke && stroke.length) {
+      if (stroke && stroke.length && panelRef.current === 'liquify') {
+        const st = useStore.getState(), img = st.image!, r = (st.liq.size / 100) * Math.min(img.width, img.height);
+        st.edit({ tool: 'liquify', params: { pts: stroke, r, strength: st.liq.strength, mode: st.liq.mode } });
+      } else if (stroke && stroke.length) {
         const st = useStore.getState(), img = st.image!, r = (st.healPct / 100) * Math.min(img.width, img.height);
         // thin a long drag so each op keeps a modest number of points
         const pts2 = stroke.filter((q, i) => i === 0 || i === stroke!.length - 1 || Math.hypot(q.x - stroke![i - 1].x, q.y - stroke![i - 1].y) > r * 0.25);
@@ -258,7 +270,7 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'reshape' ? <ReshapePanel /> : panel === 'makeup' ? <MakeupPanel /> : panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'liquify' ? <LiquifyPanel /> : panel === 'reshape' ? <ReshapePanel /> : panel === 'makeup' ? <MakeupPanel /> : panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'heal'} onClick={() => setPanel('heal')} data-testid="tool-heal">Heal</button>
@@ -267,6 +279,7 @@ export function Editor() {
         <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes (beta)</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
+        <button aria-pressed={panel === 'liquify'} onClick={() => setPanel('liquify')} data-testid="tool-liquify">Liquify</button>
         <button aria-pressed={panel === 'reshape'} onClick={() => setPanel('reshape')} data-testid="tool-reshape">Reshape</button>
         <button aria-pressed={panel === 'makeup'} onClick={() => setPanel('makeup')} data-testid="tool-makeup">Makeup</button>
         <button aria-pressed={panel === 'filters'} onClick={() => setPanel('filters')} data-testid="tool-filters">Filters</button>
