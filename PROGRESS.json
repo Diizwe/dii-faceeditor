@@ -157,5 +157,6 @@
     "Run 4: reviewer asked for highlight protection in L&C; a final encoded roll-off broke the monotone check (compressing highlights lowers contrast variance), so it was dropped. Try a tone curve that keeps the sweep metric monotone, or redefine the metric on exposure only.",
     "Run 5 decision: Phase 2 stalls on rubric/parity items that are quality-tuning; to keep the build moving, run 6 should (a) cut Whiten and Eyes to 'beta' (not minimum v1) and keep current behaviour, (b) decide Smooth parity as informational or fix with adaptive strength, (c) move on to Phase 3 for Reshape/Makeup/Filters if Phase 2 minimum tools (Smooth, Heal, L&C, compare) meet objective checks."
   ],
-  "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15"
+  "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15",
+  "handover": "2026-10-12 (user-approved): at the end of every run, after releasing the lock and pushing, schedule the next run with send_later (delay 2 minutes, message starting 'SCHEDULED RUN: do one run of the Dii-faceeditor build loop...'). Do NOT chain when: run_count would exceed 50, runs_without_passing_commit reached 3, the run died on a usage limit, or Phase 6 is done (then disable trigger trig_01G42TfmtLTVFQo6nnhvHp15 and notify). The 4-hourly trigger stays as a safety net: if it fires while a run holds the lock, answer 'lock held'."
 }
