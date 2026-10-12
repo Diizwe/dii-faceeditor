@@ -200,7 +200,7 @@ void main(){
 // Makeup: lips and blush shift chroma towards a colour while keeping each pixel's own luma (texture survives); brows darken multiplicatively.
 const MAKEUP = `#version 300 es
 precision highp float;
-uniform sampler2D uTex; uniform sampler2D uMask; uniform vec3 uLip; uniform vec3 uBlush; uniform vec3 uOp; // lip, blush, brow opacity 0..1
+uniform sampler2D uTex; uniform sampler2D uMask; uniform sampler2D uSkin; uniform vec3 uLip; uniform vec3 uBlush; uniform vec3 uOp; // lip, blush, brow opacity 0..1
 out vec4 o;
 vec3 toward(vec3 c, vec3 t, float k){ float y = dot(c, vec3(0.2126, 0.7152, 0.0722)); float yt = dot(t, vec3(0.2126, 0.7152, 0.0722)); vec3 target = y + (t - yt); return mix(c, clamp(target, 0.0, 1.0), k); }
 void main(){
@@ -210,8 +210,9 @@ void main(){
   if (m.r + m.g + m.b <= 0.0) { o = vec4(c, 1.0); return; }
   vec3 r = c;
   r = toward(r, uLip, m.r * uOp.x * 1.4);
-  r = toward(r, uBlush, m.g * uOp.y * 0.9 * (1.0 - 0.0));
-  r = r * (1.0 - m.b * uOp.z * 0.6);
+  float skinM = clamp(texelFetch(uSkin, p, 0).r, 0.0, 1.0);          // blush only ever lands on skin: never background, hair, beard edge or teeth
+  r = toward(r, uBlush, m.g * skinM * uOp.y * 0.9);
+  r = r * (1.0 - m.b * uOp.z * 1.0);
   o = vec4(clamp(r, 0.0, 1.0), 1.0);
 }`;
 
@@ -445,7 +446,7 @@ export class Renderer {
     }
     if (plan.makeup && face && this.masks.get('makeup')) {
       const dst = next(), mk = plan.makeup;
-      this.pass('makeup', MAKEUP, dst, { uTex: cur.tex, uMask: this.masks.get('makeup')!.t.tex }, { uLip: [...mk.lip] as number[], uBlush: [0.93, 0.45, 0.45], uOp: [mk.lipOp, mk.blushOp, mk.browOp] } as never);
+      this.pass('makeup', MAKEUP, dst, { uTex: cur.tex, uMask: this.masks.get('makeup')!.t.tex, uSkin: (this.maskTex ?? cur).tex }, { uLip: [...mk.lip] as number[], uBlush: [0.93, 0.45, 0.45], uOp: [mk.lipOp, mk.blushOp, mk.browOp] } as never);
       cur = dst;
     }
     if (plan.light) {

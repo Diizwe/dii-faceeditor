@@ -81,12 +81,13 @@ export function rasterMakeup(mesh: Pt[], fw: number, w: number, h: number, map: 
   const c = canvasOf(w, h), g = c.getContext('2d') as CanvasRenderingContext2D;
   g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
   const path = (pts: Pt[]) => { g.beginPath(); pts.forEach((p, i) => { const [x, y] = map(p[0], p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); };
-  g.fillStyle = '#f00'; path(poly(mesh, LIPS_OUTER)); g.fill();
-  g.fillStyle = '#000'; path(poly(mesh, LIPS_INNER)); g.fill();
+  g.fillStyle = '#f00'; path(grow(poly(mesh, LIPS_OUTER), 0.93)); g.fill();   // slightly inside the lip line so colour never spills onto skin
+  g.fillStyle = '#000'; path(grow(poly(mesh, LIPS_INNER), 1.25)); g.fill();   // and clear of teeth and the mouth interior
   g.globalCompositeOperation = 'lighter';
   const scale = (() => { const [a, b] = [map(0, 0), map(1, 0)]; return Math.hypot(b[0] - a[0], b[1] - a[1]); })();
+  const cxm = map(FACE_OVAL.reduce((a, i) => a + mesh[i][0], 0) / FACE_OVAL.length, mesh[1][1])[0];
   g.fillStyle = '#0f0';
-  for (const i of [205, 425]) { const [x, y] = map(mesh[i][0], mesh[i][1]); g.beginPath(); g.ellipse(x, y, fw * 0.1 * scale, fw * 0.075 * scale, 0, 0, Math.PI * 2); g.fill(); }
+  for (const i of [205, 425]) { const [x, y] = map(mesh[i][0], mesh[i][1]); g.beginPath(); g.ellipse(x + (cxm - x) * 0.12, y - fw * 0.02 * scale, fw * 0.085 * scale, fw * 0.065 * scale, 0, 0, Math.PI * 2); g.fill(); }
   g.fillStyle = '#00f'; path(poly(mesh, BROW_L)); g.fill(); path(poly(mesh, BROW_R)); g.fill();
   return c;
 }

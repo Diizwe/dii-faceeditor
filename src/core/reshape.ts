@@ -52,7 +52,7 @@ export function buildField(mesh: Pt[], fw: number, r: ReshapeParams, G = 48): Fi
   if (isReshapeIdentity(r) || mesh.length < 468) return null;
   const mv = moves(mesh, fw, r);
   const cx = FACE_OVAL.reduce((a, i) => a + mesh[i][0], 0) / FACE_OVAL.length, cy = FACE_OVAL.reduce((a, i) => a + mesh[i][1], 0) / FACE_OVAL.length;
-  const R0 = 0.72 * fw, band = 0.35 * fw, Rmax = R0 + band;
+  const R0 = 0.58 * fw, band = 0.27 * fw, Rmax = R0 + band; // tight: the background and clothing beside the face must not move
   const pts: [number, number][] = [], vals: [number, number][] = [];
   for (const [i, [dx, dy]] of mv) { if (dx === 0 && dy === 0) continue; pts.push([mesh[i][0] + dx, mesh[i][1] + dy]); vals.push([-dx, -dy]); }
   if (!pts.length) return null;

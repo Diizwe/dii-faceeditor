@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-8",
-    "acquired_at": "2026-10-12T10:05:55.748915+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -143,17 +143,17 @@
     {
       "id": "3.1",
       "title": "Filters (8 looks, strength 40 default)",
-      "status": "done: identity 0, monotone 0, skin hue shift within 3 deg (8 deg warm/cool, locked to 0.85), clipping <= 0.0001, all groups on an 11-photo subset"
+      "status": "done: objective checks pass; reviewer 4.0 PASS (Film look subtle)"
     },
     {
       "id": "3.2",
       "title": "Makeup (lip, blush, brow)",
-      "status": "done: luma correlation >= 0.99, outside-mask 0, clipping 0, all groups (11-photo subset x 5 lip colours); visual rubric not yet scored"
+      "status": "objective checks pass; reviewer 3.17 FAIL (blush off the face, lip bleed, brow invisible) -> blush clipped to face-skin mask, lips shrunk, brows stronger; rescore"
     },
     {
       "id": "3.3",
       "title": "Reshape (TPS warp sliders) incl. straight-lines-at-50% check",
-      "status": "todo"
+      "status": "built: TPS warp field + warp pass + tiled export; unit checks pass (min Jacobian > 0.2 at +-100, far px 0, inverse roundtrip < 0.5 px, straight lines <= 0.14% on lines >= 1 fw away); parity preview vs export ok; reviewer 3.75 FAIL (p14 background smear) -> window tightened (0.58 fw + 0.27 fw band), rescore"
     },
     {
       "id": "3.4",
