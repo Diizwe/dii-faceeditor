@@ -6,13 +6,13 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-3",
-    "acquired_at": "2026-10-12T01:20:28.537469+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
     "0": "done",
-    "1": "gate pending only task 0.8 (real 54 MP file); everything else passed",
+    "1": "done (0.8 cut to synthetic 48 MP)",
     "2": "in_progress",
     "3": "pending",
     "4": "pending",
@@ -58,7 +58,7 @@
     {
       "id": "0.8",
       "title": "Fetch 54MP original (stress48) once Commons Retry-After lapses; store at testdata/stress/stress48.jpg [Commons returns 429 with Retry-After 600 on originals; after repeated attempts still throttled at 19:06Z. Wait >= 1 hour with NO requests, then try once. Phase 1 may proceed with a synthetic 48 MP buffer for texture/memory plumbing and must use the real file for the Phase 1 gate.]",
-      "status": "todo: one attempt per run. Run 2 tried at 21:38Z -> 429 again. Next attempt >= 1 h later (run 3)"
+      "status": "cut: 3 attempts across runs 1-3 all 429; synthetic 8000x6000 used for the Phase 1 gate; retry once in v1.1"
     },
     {
       "id": "0.9",
@@ -113,17 +113,17 @@
     {
       "id": "2.3",
       "title": "Smooth",
-      "status": "objective checks pass on every group (outside 0, overshoot 0, retention, blemish, hue, clipping); OPEN: cross-group parity (detail retention at max, blemish reduction); fix in progress: range tolerance now follows local brightness (untested)"
+      "status": "checks pass per group; cross-group parity open (experiment failed, see build/EXPERIMENT_smooth_range.md); reviewer 3.88"
     },
     {
       "id": "2.4",
       "title": "Heal",
-      "status": "in progress: outside 0, determinism 0; std ratio / seam ratio failed on group 5-6 before gradient-feather + texture-match change (retest pending); blemish-removal check rewritten to low-frequency error"
+      "status": "outside 0, deterministic, seam ok; std ratio fails on some edge-adjacent blemishes (stubble/ear); weak near hair and face edges"
     },
     {
       "id": "2.5",
       "title": "Whiten",
-      "status": "in progress: L max passes; b* floor and yellow reduction tuned (retest pending); GAP: no MST 1-2 photo with visible teeth, add photos"
+      "status": "L max ok; yellow reduction fails 2 groups; few photos show teeth (7 of 33), none in MST 1-2; reviewer 3.92 on 3 photos"
     },
     {
       "id": "2.6",
@@ -138,7 +138,7 @@
     {
       "id": "2.8",
       "title": "Phase 2 gate: objective checks all groups + reviewer agent rubric scores (>=4.0) from before/after contact sheets (tools.mjs sheets)",
-      "status": "todo"
+      "status": "reviewer run 3 (strict): Smooth 3.88, L&C 3.46, Whiten 3.92, Eyes 3.71, all below 4.0. Fixes applied to L&C (highlight shoulder, gentler contrast) and Eyes (gentler clarity/brighten); re-score next run"
     }
   ],
   "open_failures": [],
@@ -152,7 +152,8 @@
     "Run 1 ended at the Phase 0 gate (2026-10-11 ~19:10Z). Next scheduled run starts Phase 1.",
     "Trigger changed 2026-10-11 by the setup session (verified with get_trigger: enabled, every 4h at :20 of 01/05/09/13/17/21 UTC, bound to this persistent session). Old trigger trig_01PHSqXnvQhVJjwyTU7WHcgQ is disabled: scheduled routines created via the routine tool cannot attach repo sources, so the schedule wakes this persistent session instead. The 21:20Z fire arrived mid-run 2 and was answered 'lock held' (no work). After Phase 6 disable the new trigger (update_trigger enabled=false) or say so in the final notification.",
     "Run 2 findings to remember: (1) never run two Chromium suites at once (launch SIGSEGV); (2) pkill -f with a pattern that appears in my own command kills my shell; (3) createImageBitmap(bitmap, ..., {colorSpaceConversion:'none'}) reverts a converted bitmap to raw profile values, so crops must not pass it; (4) Human mesh has 478 points but its left/right iris numbering is swapped vs the eye outlines: pair by nearest outline; (5) the 'face' used by every face tool is the single active face.",
-    "Run 2 ended ~00:00Z: lock released, everything pushed. Run 3 order: (1) one attempt at the 54 MP original; (2) retest heal and whiten; (3) smooth parity experiment in build/EXPERIMENT_smooth_range.md; (4) add MST 1-2 smiling photos; (5) contact sheets + reviewer agent; (6) Phase 2 gate. tools.mjs suites are long (about 10-15 min each): run them one at a time, never two Chromium at once."
+    "Run 2 ended ~00:00Z: lock released, everything pushed. Run 3 order: (1) one attempt at the 54 MP original; (2) retest heal and whiten; (3) smooth parity experiment in build/EXPERIMENT_smooth_range.md; (4) add MST 1-2 smiling photos; (5) contact sheets + reviewer agent; (6) Phase 2 gate. tools.mjs suites are long (about 10-15 min each): run them one at a time, never two Chromium at once.",
+    "Run 3: reviewer defects to fix next: Smooth plastic on p23/p28/p05 (re-add texture, avoid pink shift); Eyes pupils turn black and p28 asymmetric; Whiten yellow cast remains on p14; L&C clipped p31 (fixed by shoulder). Re-run sheets (node tests/browser/tools.mjs sheets) and re-score."
   ],
   "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15"
 }

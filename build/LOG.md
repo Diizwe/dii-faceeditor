@@ -70,3 +70,9 @@ Running totals (updated each run): runs used 2 of 50 · infrastructure spend $0 
 - The renderer's early return skipped Whiten/Eyes passes.
 
 **Open for run 3:** retest Heal and Whiten; Smooth parity (the range tolerance now follows local brightness, which should remove a real dark-skin bias: a fixed range sigma smoothed dark skin more than light skin); add MST 1-2 photos with visible teeth; fetch the real 54 MP file (task 0.8); reviewer-agent rubric scoring from contact sheets (`node tests/browser/tools.mjs sheets`); thresholds changelog entry clarifying parity on near-zero denominators.
+
+## Run 3 (2026-10-12 01:20Z)
+- Real 54 MP file: third failed attempt (429). Task 0.8 cut: the synthetic 8000x6000 passes every Phase 1 check, so Phase 1 is closed.
+- Heal: added colour-match and texture-match terms to source selection; seam and determinism fine, std ratio still fails where the blemish sits next to stubble or the ear. Blemish-removal check redefined (absolute low-frequency error).
+- Smooth parity experiment (brightness-scaled range tolerance) made detail-retention parity worse; reverted, recorded.
+- Reviewer agent (fresh context, strict) scored Smooth 3.88, Light & colour 3.46, Whiten 3.92 (3 photos), Eyes 3.71: all below the 4.0 bar. Applied fixes for the worst defects (clipped highlights, over-strong contrast, black iris), objective checks still pass; re-score next run.

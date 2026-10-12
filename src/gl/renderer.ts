@@ -26,6 +26,8 @@ void main(){
   vec3 c = texelFetch(uTex, ivec2(gl_FragCoord.xy), 0).rgb;
   vec3 l = toLin(c);
   l *= exp2(uA.x);
+  // soft shoulder: highlights above 0.8 roll off instead of clipping when exposure is raised
+  l = mix(l, 0.8 + 0.2 * (1.0 - exp(-(l - 0.8) / 0.2)), step(0.8, l) * step(0.0001, uA.x));
   // Warmth protects skin tones: white-balance gains are applied to everything, then for skin-hued, skin-saturated pixels the
   // result keeps its new luma and chroma size but takes back the original hue direction (hue-preserving), so faces stay natural while the scene warms.
   float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)), dd = mx - mn;
@@ -60,7 +62,7 @@ void main(){
   }
   e = Ye + d * k;
   vec3 s = e*e*(3.0-2.0*e);
-  e = uA.y >= 0.0 ? mix(e, s, uA.y) : 0.5 + (e - 0.5) * (1.0 + uA.y);
+  e = uA.y >= 0.0 ? mix(e, s, 0.7 * uA.y) : 0.5 + (e - 0.5) * (1.0 + uA.y); // gentler S-curve: keeps shadows from crushing
   o = vec4(clamp(e, 0.0, 1.0), 1.0);
 }`;
 
@@ -152,9 +154,9 @@ void main(){
   float m = clamp(texelFetch(uMask, p, 0).r, 0.0, 1.0);
   if (m <= 0.0) { o = vec4(c, 1.0); return; }
   vec3 b = texelFetch(uBlur, p, 0).rgb;
-  vec3 e = c + (c - b) * (2.0 * uP.y);
+  vec3 e = c + (c - b) * (1.0 * uP.y);
   float Y = dot(e, vec3(0.2126, 0.7152, 0.0722));
-  e += uP.x * 0.16 * (1.0 - Y) * (0.4 + Y);
+  e += uP.x * 0.10 * (1.0 - Y) * (0.4 + Y);
   o = vec4(clamp(mix(c, e, m), 0.0, 1.0), 1.0);
 }`;
 
