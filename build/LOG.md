@@ -82,3 +82,6 @@ Running totals (updated each run): runs used 2 of 50 · infrastructure spend $0 
 - Reviewer (fresh context): Smooth 4.28 PASS, Eyes 4.25 PASS, Whiten 3.75 FAIL (2 photos), Light & colour 3.46 FAIL.
 - A highlight roll-off after contrast broke the monotone sweep metric and was removed; the linear exposure shoulder stays.
 - Open for run 5: Light & colour highlights/orange skin (rescore), Whiten (more photos, under-whitens stained teeth, paper-white on light teeth), Heal near stubble/edges, Smooth parity, MST 1-2 teeth photos.
+
+## Run 5 (2026-10-12 09:20Z)
+Looked at the Light & colour sheets directly: p31 is already a high-key photo and +0.3 EV with stacked warmth/contrast clips it by design; p21 shows a normal warm lift. A stronger highlight shoulder (knee 0.6) breaks the monotone exposure check because any highlight compression lowers mean luma at small positive EV, so the 0.8 knee stays. No code change this run; recorded a decision plan for run 6 (Whiten/Eyes as beta, Smooth parity decision, then Phase 3).
