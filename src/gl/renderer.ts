@@ -55,7 +55,7 @@ void main(){
   // saturation scales chroma about luma in encoded space, which keeps hue exactly; the gain is limited per pixel so no channel clips
   float Ye = dot(e, vec3(0.2126, 0.7152, 0.0722));
   vec3 d = e - Ye;
-  float k = 1.0 + uA.w;
+  float k = 1.0 + 0.7 * uA.w; // saturation acts at 70%: stacked with warmth it turned skin orange
   if (k > 1.0) {
     vec3 room = mix(Ye / max(-d, vec3(1e-6)), (1.0 - Ye) / max(d, vec3(1e-6)), step(0.0, d));
     k = min(k, max(1.0, min(room.r, min(room.g, room.b))));

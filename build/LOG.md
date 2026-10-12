@@ -76,3 +76,9 @@ Running totals (updated each run): runs used 2 of 50 · infrastructure spend $0 
 - Heal: added colour-match and texture-match terms to source selection; seam and determinism fine, std ratio still fails where the blemish sits next to stubble or the ear. Blemish-removal check redefined (absolute low-frequency error).
 - Smooth parity experiment (brightness-scaled range tolerance) made detail-retention parity worse; reverted, recorded.
 - Reviewer agent (fresh context, strict) scored Smooth 3.88, Light & colour 3.46, Whiten 3.92 (3 photos), Eyes 3.71: all below the 4.0 bar. Applied fixes for the worst defects (clipped highlights, over-strong contrast, black iris), objective checks still pass; re-score next run.
+
+## Run 4 (2026-10-12 05:20Z)
+- Smooth now keeps 15% of the original texture, takes half the chroma change and re-clamps to the local range (overshoot back to 0); Eyes clarity is bounded; Whiten hue/saturation gates widened and shrink raised; Light & colour saturation acts at 70%.
+- Reviewer (fresh context): Smooth 4.28 PASS, Eyes 4.25 PASS, Whiten 3.75 FAIL (2 photos), Light & colour 3.46 FAIL.
+- A highlight roll-off after contrast broke the monotone sweep metric and was removed; the linear exposure shoulder stays.
+- Open for run 5: Light & colour highlights/orange skin (rescore), Whiten (more photos, under-whitens stained teeth, paper-white on light teeth), Heal near stubble/edges, Smooth parity, MST 1-2 teeth photos.

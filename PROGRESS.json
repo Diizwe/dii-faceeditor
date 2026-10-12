@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-4",
-    "acquired_at": "2026-10-12T05:20:54.601977+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -103,7 +103,7 @@
     {
       "id": "2.1",
       "title": "Light & colour",
-      "status": "done: identity 0, monotone 0 violations, skin hue shift <= 0.5 deg all groups (face-mask skin protection for warmth)"
+      "status": "checks pass; reviewer 3.46 FAIL (p31 blow-out, orange skin); saturation now 70%, linear shoulder kept; rescore"
     },
     {
       "id": "2.2",
@@ -113,7 +113,7 @@
     {
       "id": "2.3",
       "title": "Smooth",
-      "status": "checks pass per group; cross-group parity open (experiment failed, see build/EXPERIMENT_smooth_range.md); reviewer 3.88"
+      "status": "objective checks pass every group (overshoot 0 after re-clamp); parity open; reviewer 4.28 PASS"
     },
     {
       "id": "2.4",
@@ -123,12 +123,12 @@
     {
       "id": "2.5",
       "title": "Whiten",
-      "status": "L max ok; yellow reduction fails 2 groups; few photos show teeth (7 of 33), none in MST 1-2; reviewer 3.92 on 3 photos"
+      "status": "yellow reduction passes 2 of 3 groups (5-6 photo fails); reviewer 3.75 on 2 photos (p05 near paper-white, p14 under-whitened); no teeth photo in MST 1-2"
     },
     {
       "id": "2.6",
       "title": "Eyes",
-      "status": "done: all objective checks pass on every group (24 of 33 photos have a visible iris)"
+      "status": "done: checks pass; reviewer 4.25 PASS (weak visible effect)"
     },
     {
       "id": "2.7",
@@ -138,7 +138,7 @@
     {
       "id": "2.8",
       "title": "Phase 2 gate: objective checks all groups + reviewer agent rubric scores (>=4.0) from before/after contact sheets (tools.mjs sheets)",
-      "status": "reviewer run 3 (strict): Smooth 3.88, L&C 3.46, Whiten 3.92, Eyes 3.71, all below 4.0. Fixes applied to L&C (highlight shoulder, gentler contrast) and Eyes (gentler clarity/brighten); re-score next run"
+      "status": "run 4 reviewer: Smooth 4.28 pass, Eyes 4.25 pass, Whiten 3.75 fail, L&C 3.46 fail. Open: heal edge cases, whiten, L&C, smooth parity, MST 1-2 teeth photos"
     }
   ],
   "open_failures": [],
@@ -153,7 +153,8 @@
     "Trigger changed 2026-10-11 by the setup session (verified with get_trigger: enabled, every 4h at :20 of 01/05/09/13/17/21 UTC, bound to this persistent session). Old trigger trig_01PHSqXnvQhVJjwyTU7WHcgQ is disabled: scheduled routines created via the routine tool cannot attach repo sources, so the schedule wakes this persistent session instead. The 21:20Z fire arrived mid-run 2 and was answered 'lock held' (no work). After Phase 6 disable the new trigger (update_trigger enabled=false) or say so in the final notification.",
     "Run 2 findings to remember: (1) never run two Chromium suites at once (launch SIGSEGV); (2) pkill -f with a pattern that appears in my own command kills my shell; (3) createImageBitmap(bitmap, ..., {colorSpaceConversion:'none'}) reverts a converted bitmap to raw profile values, so crops must not pass it; (4) Human mesh has 478 points but its left/right iris numbering is swapped vs the eye outlines: pair by nearest outline; (5) the 'face' used by every face tool is the single active face.",
     "Run 2 ended ~00:00Z: lock released, everything pushed. Run 3 order: (1) one attempt at the 54 MP original; (2) retest heal and whiten; (3) smooth parity experiment in build/EXPERIMENT_smooth_range.md; (4) add MST 1-2 smiling photos; (5) contact sheets + reviewer agent; (6) Phase 2 gate. tools.mjs suites are long (about 10-15 min each): run them one at a time, never two Chromium at once.",
-    "Run 3: reviewer defects to fix next: Smooth plastic on p23/p28/p05 (re-add texture, avoid pink shift); Eyes pupils turn black and p28 asymmetric; Whiten yellow cast remains on p14; L&C clipped p31 (fixed by shoulder). Re-run sheets (node tests/browser/tools.mjs sheets) and re-score."
+    "Run 3: reviewer defects to fix next: Smooth plastic on p23/p28/p05 (re-add texture, avoid pink shift); Eyes pupils turn black and p28 asymmetric; Whiten yellow cast remains on p14; L&C clipped p31 (fixed by shoulder). Re-run sheets (node tests/browser/tools.mjs sheets) and re-score.",
+    "Run 4: reviewer asked for highlight protection in L&C; a final encoded roll-off broke the monotone check (compressing highlights lowers contrast variance), so it was dropped. Try a tone curve that keeps the sweep metric monotone, or redefine the metric on exposure only."
   ],
   "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15"
 }

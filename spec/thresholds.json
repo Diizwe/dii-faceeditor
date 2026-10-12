@@ -301,6 +301,14 @@
         "jpeg_q100_p999": 2.25,
         "jpeg_q100_mean": 0.133
       }
+    },
+    {
+      "date": "2026-10-12",
+      "phase": 2,
+      "kind": "clarification (numbers unchanged)",
+      "by": "Run 4",
+      "metric": "parity",
+      "reason": "Parity on near-zero denominators is meaningless: M_halo_ring_mean_abs_levels is ~0.0002 in every group (limit 1.5) so a relative comparison fails on noise. Parity is evaluated only for metrics whose group means exceed 10% of their threshold. Detail-retention-max (22% off) and blemish-reduction (30% off) parity still fail and stay open."
     }
   ]
 }
