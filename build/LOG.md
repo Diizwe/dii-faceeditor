@@ -110,3 +110,6 @@ Per the plan's rule (a task failing its gate 3 times is cut to its simplest work
 
 ## Run 12 (2026-10-12 12:04Z): Phase 5 polish
 Service worker (offline reload verified), persistent-storage request, one-time onboarding tips, per-pass profiling hook. Measured with eight tools active on the 2048x1536 preview: slowest pass 43 ms on the software GPU (budget 250), preview textures 240 MB, full-stack 12 MP export peak 78 MB (budget 256). Real-device frame rate (16 ms budget) is for the iPhone checklist.
+
+## Run 13 (2026-10-12 12:35Z): Phase 6 handoff, build complete
+Wrote `docs/CASE_STUDY.md`, `docs/TESTING_KIT.md`, `docs/KNOWN_GAPS.md`, polished the README, rendered a 62 s demo video with Remotion on the workspace Chromium (`video/`, `docs/demo/dii-faceeditor-demo.mp4`), fixed the top bar clipping on narrow phones. Final automated run: 41 unit tests, the Chromium browser suite and the face suite all pass. Total runs used: 13 of 50. Scheduling stopped: no further chained run, and the 4-hourly trigger `trig_01G42TfmtLTVFQo6nnhvHp15` was disabled. What remains needs a human: the iPhone, Firefox and Safari checks and the Facetune benchmark in the testing kit.

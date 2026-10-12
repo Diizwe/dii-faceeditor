@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-13",
-    "acquired_at": "2026-10-12T12:35:04.562863+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -17,7 +17,7 @@
     "3": "done with documented exceptions (run 10)",
     "4": "done: Tier 3 moved to v1.1 (run 11)",
     "5": "done (run 12)",
-    "6": "in_progress"
+    "6": "done (run 13)"
   },
   "tasks": [
     {
@@ -178,7 +178,7 @@
     {
       "id": "6.1",
       "title": "Handoff: case study draft, build log final, 60-90 s demo video (Remotion on workspace Chromium), testing kit (iPhone checklist first item export a 12 MP photo, Firefox + desktop Safari checks, Facetune benchmark steps + rater form), README, known-gaps list; then notify and disable trigger",
-      "status": "todo"
+      "status": "done (run 13): docs/CASE_STUDY.md, TESTING_KIT.md, KNOWN_GAPS.md, README, demo video docs/demo/dii-faceeditor-demo.mp4 (62 s), full automated suites pass (unit 41, browser suite, faces suite)"
     }
   ],
   "open_failures": [],
@@ -197,7 +197,8 @@
     "Run 4: reviewer asked for highlight protection in L&C; a final encoded roll-off broke the monotone check (compressing highlights lowers contrast variance), so it was dropped. Try a tone curve that keeps the sweep metric monotone, or redefine the metric on exposure only.",
     "Run 5 decision: Phase 2 stalls on rubric/parity items that are quality-tuning; to keep the build moving, run 6 should (a) cut Whiten and Eyes to 'beta' (not minimum v1) and keep current behaviour, (b) decide Smooth parity as informational or fix with adaptive strength, (c) move on to Phase 3 for Reshape/Makeup/Filters if Phase 2 minimum tools (Smooth, Heal, L&C, compare) meet objective checks.",
     "Run 6 Phase 2 closure (decision, logged in build/LOG.md): every tool passes its per-group objective checks except the listed gaps. Smooth ships with the cross-group parity gap on detail-retention-max and blemish-reduction (3 attempts failed); Heal ships with the stubble/edge limitation (std ratio 1.34 on group 5-6); Light & colour ships (reviewer 3.46, clipping on already high-key photos); Whiten and Eyes ship as 'beta' labelled in the UI (reviewer: Eyes 4.25, Whiten 3.75 on 2 photos, no MST 1-2 teeth photo). The handoff must state these plainly.",
-    "Run 10: Phase 3 closed with exceptions (3-attempt rule): Makeup 3.6 and Liquify 3.5 reviewer averages, Reshape 4.08, Filters 4.0. Gaps to state in the handoff. Phase 4 (Tier 3) starts; plan says Tier 3 moves to v1.1 if Phase 4 slips."
+    "Run 10: Phase 3 closed with exceptions (3-attempt rule): Makeup 3.6 and Liquify 3.5 reviewer averages, Reshape 4.08, Filters 4.0. Gaps to state in the handoff. Phase 4 (Tier 3) starts; plan says Tier 3 moves to v1.1 if Phase 4 slips.",
+    "Run 13: build complete. Chain stopped on purpose (no further send_later). Trigger trig_01G42TfmtLTVFQo6nnhvHp15 disabled at the end of run 13 (see build/LOG.md). Remaining work is human: iPhone/Firefox/Safari testing and the Facetune benchmark (docs/TESTING_KIT.md), then v1.1 (Background, Object erase, gaps in docs/KNOWN_GAPS.md)."
   ],
   "trigger_id": "trig_01G42TfmtLTVFQo6nnhvHp15",
   "handover": "2026-10-12 (user-approved): at the end of every run, after releasing the lock and pushing, schedule the next run with send_later (delay 2 minutes, message starting 'SCHEDULED RUN: do one run of the Dii-faceeditor build loop...'). Do NOT chain when: run_count would exceed 50, runs_without_passing_commit reached 3, the run died on a usage limit, or Phase 6 is done (then disable trigger trig_01G42TfmtLTVFQo6nnhvHp15 and notify). The 4-hourly trigger stays as a safety net: if it fires while a run holds the lock, answer 'lock held'."
