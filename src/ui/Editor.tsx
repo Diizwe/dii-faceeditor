@@ -25,6 +25,9 @@ import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
+// Tier 3 tools that did not reach the quality bar in v1 (Background scored about 3.1 of 4.0 in review); the code and tests stay, the button is hidden until v1.1
+const SHOW_V11_TOOLS = new URLSearchParams(location.search).has('v11');
+
 type Panel = 'background' | 'liquify' | 'reshape' | 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
@@ -298,7 +301,7 @@ export function Editor() {
         <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes (beta)</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
-        <button aria-pressed={panel === 'background'} onClick={() => setPanel('background')} data-testid="tool-background">Background</button>
+        {SHOW_V11_TOOLS && <button aria-pressed={panel === 'background'} onClick={() => setPanel('background')} data-testid="tool-background">Background</button>}
         <button aria-pressed={panel === 'liquify'} onClick={() => setPanel('liquify')} data-testid="tool-liquify">Liquify</button>
         <button aria-pressed={panel === 'reshape'} onClick={() => setPanel('reshape')} data-testid="tool-reshape">Reshape</button>
         <button aria-pressed={panel === 'makeup'} onClick={() => setPanel('makeup')} data-testid="tool-makeup">Makeup</button>

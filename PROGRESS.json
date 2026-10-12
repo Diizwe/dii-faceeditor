@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-11",
-    "acquired_at": "2026-10-12T11:17:37.120672+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -15,8 +15,8 @@
     "1": "done (0.8 cut to synthetic 48 MP)",
     "2": "done with documented exceptions (run 6)",
     "3": "done with documented exceptions (run 10)",
-    "4": "in_progress",
-    "5": "pending",
+    "4": "done: Tier 3 moved to v1.1 (run 11)",
+    "5": "in_progress",
     "6": "pending"
   },
   "tasks": [
@@ -163,11 +163,16 @@
     {
       "id": "4.1",
       "title": "Background (remove/blur/replace) with selfie/meet segmenter on face crop + from-scratch guided filter",
-      "status": "todo"
+      "status": "built and tested (person core changed px 0 all groups, export parity mean ~0, guided filter unit tests); reviewer 3.1 after two rounds (halos on dark-on-dark and white-on-white, no decontamination or light wrap) -> DEFERRED to v1.1, button hidden (visible with ?v11 in the URL)"
     },
     {
       "id": "4.2",
       "title": "Object erase (PatchMatch-style, reuse Heal engine with larger masks)",
+      "status": "deferred to v1.1 (plan: Tier 3 moves to v1.1 if Phase 4 slips); thresholds already tagged v1.1"
+    },
+    {
+      "id": "5.1",
+      "title": "Onboarding (first-run hints), offline caching (service worker + Cache Storage for app and models) with persistent-storage request, final performance pass (per-pass ms and memory budgets at 2048 px)",
       "status": "todo"
     }
   ],
