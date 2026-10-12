@@ -46,7 +46,8 @@ window.H.parity = async (geometry, ops) => {
   await new Promise((r) => setTimeout(r, 600));
   const pv = window.__dii.renderer.readOutHalf();
   const s2 = t.store.getState();
-  const res = await t.exportImage(s2.image, { format: 'png', quality: 100, geometry, edit: t.editFrom(s2.history, s2.faces, s2.activeFace) });
+  const ed = t.editFrom(s2.history, s2.faces, s2.activeFace);
+  const res = await t.exportImage(s2.image, { format: 'png', quality: 100, geometry, edit: ed, bgAlpha: ed.background && s2.bgRaw ? { w: s2.bgRaw.w, h: s2.bgRaw.h, data: t.refinedAlpha(s2.image.preview, s2.bgRaw, ed.background.edge) } : undefined });
   const bmp = await createImageBitmap(res.blob, { colorSpaceConversion: 'none' });
   const c = new OffscreenCanvas(pv.w, pv.h); const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(bmp, 0, 0, pv.w, pv.h); const ex = g.getImageData(0, 0, pv.w, pv.h).data;

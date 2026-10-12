@@ -110,7 +110,7 @@ export async function exportImage(img: LoadedImage, o: ExportOptions): Promise<E
             if (liqGrid) plan.liquify = { grid: { ...liqGrid, x0: liqGrid.x0 - rx0, x1: liqGrid.x1 - rx0, y0: liqGrid.y0 - ry0, y1: liqGrid.y1 - ry0 }, key: `${tx},${ty}` };
             if (E!.background && o.bgAlpha) {
               const c1 = BG_COLOURS[E!.background.colour] ?? BG_COLOURS[0], c2 = BG_COLOURS[(E!.background.colour + 2) % BG_COLOURS.length];
-              plan.bg = { alpha: o.bgAlpha, key: `edge${E!.background.edge}`, m: rm.map((v) => v * k) as Affine, mode: E!.background.mode, blurPx: bgBlurPx, c1: c1.rgb, c2: c2.rgb };
+              plan.bg = { alpha: o.bgAlpha, key: `edge${E!.background.edge}`, m: [rm[0] * k, rm[1] * k, (rm[2] + rb.x0) * k, rm[3] * k, rm[4] * k, (rm[5] + rb.y0) * k] as Affine, mode: E!.background.mode, blurPx: bgBlurPx, c1: c1.rgb, c2: c2.rgb };
             }
             px = r.renderRegionPixels(bmp2, plan, { x: tx - rx0, y: ty - ry0, w: tw, h: th });
             peak = Math.max(peak, bmp2.width * bmp2.height * 4 + rw * rh * 16 * 5);

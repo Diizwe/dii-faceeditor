@@ -375,7 +375,9 @@ if (only === 'sheets') {
     reshape: { tool: 'reshape', params: { jaw: 60, chin: 40, noseW: 50, noseL: 0, eyeSize: 40, eyeDist: 0, lips: 40, faceW: 50 }, label: 'Reshape 60/40/50/40/40/50' },
     makeup: { tool: 'makeup', params: { lip: 30, blush: 25, brow: 25, colour: 1 }, label: 'Makeup coral 30/25/25' },
     filters: { tool: 'filters', params: { look: 4, strength: 60 }, label: 'Filter Film 60' },
-    liquify: { tool: 'liquify', params: { rel: true }, label: 'Liquify: push jaw in, bloat eyes' } };
+    liquify: { tool: 'liquify', params: { rel: true }, label: 'Liquify: push jaw in, bloat eyes' },
+    background: { tool: 'background', params: { mode: 0, blur: 70, edge: 40, colour: 0 }, label: 'Background blur 70', bg: true },
+    backgroundSage: { tool: 'background', params: { mode: 1, blur: 0, edge: 40, colour: 3 }, label: 'Background replace: sage', bg: true } };
   for (const [name, spec] of Object.entries(tools)) {
     const tiles = [];
     for (const id of ids) {
@@ -389,6 +391,7 @@ if (only === 'sheets') {
           t.store.getState().edit({ tool: 'liquify', params: { pts: [{ x: bx + bw * 0.98, y: by + bh * 0.8 }, { x: bx + bw * 0.86, y: by + bh * 0.82 }], r: bw * 0.18, strength: 60, mode: 'push' } });
           t.store.getState().edit({ tool: 'liquify', params: { pts: [{ x: bx + bw * 0.5, y: by + bh * 0.9 }], r: bw * 0.15, strength: 50, mode: 'pucker' } });
           await new Promise((r) => setTimeout(r, 400)); aft = window.__dii.renderer.readOutHalf(); }
+        else if (spec.bg) { const t = window.__diiTest; t.store.setState({ history: { ops: [], ptr: 0, open: null } }); t.store.getState().edit({ tool: 'background', params: spec.params }); for (let i = 0; i < 600 && !t.store.getState().bgRaw; i++) await new Promise((r) => setTimeout(r, 100)); await new Promise((r) => setTimeout(r, 900)); aft = window.__dii.renderer.readOutHalf(); }
         else aft = await window.H.toolFrame(spec.tool, spec.params);
         const [bx, by, bw, bh] = f.box; const pad = 0.25; const x0 = Math.max(0, Math.floor(bx - bw * pad)), y0 = Math.max(0, Math.floor(by - bh * pad)), x1 = Math.min(base.w, Math.ceil(bx + bw * (1 + pad))), y1 = Math.min(base.h, Math.ceil(by + bh * (1 + pad)));
         const w = x1 - x0, h = y1 - y0;
