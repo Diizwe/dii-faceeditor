@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-12",
-    "acquired_at": "2026-10-12T12:04:59.908909+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -16,8 +16,8 @@
     "2": "done with documented exceptions (run 6)",
     "3": "done with documented exceptions (run 10)",
     "4": "done: Tier 3 moved to v1.1 (run 11)",
-    "5": "in_progress",
-    "6": "pending"
+    "5": "done (run 12)",
+    "6": "in_progress"
   },
   "tasks": [
     {
@@ -173,6 +173,11 @@
     {
       "id": "5.1",
       "title": "Onboarding (first-run hints), offline caching (service worker + Cache Storage for app and models) with persistent-storage request, final performance pass (per-pass ms and memory budgets at 2048 px)",
+      "status": "done: service worker (cache-first shell + models, network-first HTML) verified by offline reload; storage.persist() requested after the first photo; first-run tips (shown once); per-pass worst 43 ms at 2048x1536 with eight tools active (limit 250 on SwiftShader); preview texture 240 MB, export peak 78 MB at 12 MP full stack (limit 256); initial JS 99 KB gzip"
+    },
+    {
+      "id": "6.1",
+      "title": "Handoff: case study draft, build log final, 60-90 s demo video (Remotion on workspace Chromium), testing kit (iPhone checklist first item export a 12 MP photo, Firefox + desktop Safari checks, Facetune benchmark steps + rater form), README, known-gaps list; then notify and disable trigger",
       "status": "todo"
     }
   ],

@@ -175,6 +175,48 @@ if (!only || only === 'perf') {
   const ms = await page.evaluate(() => window.__dii.renderer.timeGeometryPass([1, 0, 0, 0, 1, 0], 5));
   check('per_pass_ms_software_gpu_2048', ms, ms <= T.runtime_budgets.per_pass_ms_software_gpu_2048, { limit: T.runtime_budgets.per_pass_ms_software_gpu_2048 });
 }
+
+// ---- 5b. full-stack per-pass time and texture memory at the 2048 px preview, offline reload, onboarding
+if (!only || only === 'perf2') {
+  await openFile(path.join(fx, 'f12_p3.jpg'));
+  const R = await page.evaluate(async () => {
+    const t = window.__diiTest; for (let i = 0; i < 900 && !t.store.getState().faces; i++) await new Promise((r) => setTimeout(r, 100));
+    const faces = t.store.getState().faces; if (!faces || !faces.length) return { error: 'no face on the fixture' };
+    t.store.getState().setActiveFace(faces[0].id);
+    const r = window.__dii.renderer; r.profile = {};
+    const ops = [{ tool: 'smooth', params: { strength: 60, soften: 30, face: faces[0].id } }, { tool: 'whiten', params: { strength: 60, face: faces[0].id } }, { tool: 'eyes', params: { brighten: 40, clarity: 40, face: faces[0].id } },
+      { tool: 'makeup', params: { lip: 30, blush: 20, brow: 20, colour: 0, face: faces[0].id } }, { tool: 'light', params: { exposure: 0.2, contrast: 10, warmth: 10, saturation: 10 } }, { tool: 'filters', params: { look: 4, strength: 40 } },
+      { tool: 'reshape', params: { jaw: 30, chin: 0, noseW: 0, noseL: 0, eyeSize: 20, eyeDist: 0, lips: 0, faceW: 20 } }, { tool: 'liquify', params: { pts: [{ x: 1500, y: 1500 }, { x: 1600, y: 1550 }], r: 150, strength: 40, mode: 'push' } }];
+    t.store.setState({ history: { ops: [], ptr: 0, open: null } });
+    for (const op of ops) t.store.getState().edit(op);
+    await new Promise((r2) => setTimeout(r2, 4000));
+    const w = r.workSize; const prof = {}; for (const [k, v] of Object.entries(r.profile)) prof[k] = Math.max(...v);
+    const st = t.store.getState(); const res = await t.exportImage(st.image, { format: 'jpeg', quality: 90, geometry: { rot90: 0, flipH: false, flipV: false, angle: 0, aspect: null }, edit: t.editFrom(st.history, st.faces, st.activeFace) });
+    return { w, prof, mb: r.textureBytes() / 1048576, exportPeakMb: res.peakTextureBytes / 1048576, exportW: res.width };
+  });
+  if (R.error) check('perf2_setup', R.error, false); else {
+    console.log('  per-pass worst ms at', R.w.join('x'), JSON.stringify(Object.fromEntries(Object.entries(R.prof).map(([k, v]) => [k, Math.round(v)]))));
+    const worst = Math.max(...Object.values(R.prof));
+    check('per_pass_ms_software_gpu_2048 (all tools, worst pass)', worst, worst <= T.runtime_budgets.per_pass_ms_software_gpu_2048, { limit: 250 });
+    check('export_peak_texture_mb (full tool stack, 12 MP)', R.exportPeakMb, R.exportPeakMb <= T.runtime_budgets.export_peak_texture_mb, { limit: T.runtime_budgets.export_peak_texture_mb });
+    check('preview_texture_mb (all tools active)', R.mb, R.mb <= 512, { note: 'informational limit 512 MB; export budget 256 MB is checked separately' });
+  }
+  // offline: reload with the network off; the shell must come from the service worker cache
+  await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 60000 }); await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.ready.then(() => true), null, { timeout: 30000 }).catch(() => {});
+  await page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return !!r.active; });
+  await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForTimeout(2500);
+  await ctx.setOffline(true);
+  let offlineOk = false; try { await page.reload({ timeout: 15000, waitUntil: 'domcontentloaded' }); await page.waitForSelector('[data-testid=choose]', { timeout: 10000 }); offlineOk = true; } catch { offlineOk = false; }
+  await ctx.setOffline(false);
+  check('offline_reload_shows_app', offlineOk, offlineOk);
+  // onboarding shows once
+  await page.evaluate(() => localStorage.removeItem('dii-onboarded'));
+  await openFile(path.join(fx, 'f12_p3.jpg'));
+  const showed = await page.locator('[data-testid=onboarding]').count(); check('onboarding_shown_first_time', showed, showed === 1);
+  await page.click('[data-testid=onboarding-ok]');
+  await openFile(path.join(fx, 'f12_p3.jpg'));
+  const again = await page.locator('[data-testid=onboarding]').count(); check('onboarding_not_shown_again', again, again === 0);
+}
 const third = [...origins].filter((o) => o !== new URL(base).origin);
 check('M_third_party_requests', third, third.length === 0);
 const jsKb = (() => { const html = fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8'); const m = [...html.matchAll(/src="\.\/(assets\/[^"]+\.js)"/g)].map((x) => x[1]); return m.reduce((n, f) => n + execFileSync('gzip', ['-c', path.join(root, 'dist', f)], { maxBuffer: 1 << 26 }).length, 0) / 1024; })();

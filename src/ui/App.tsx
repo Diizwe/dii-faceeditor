@@ -13,11 +13,13 @@ export function App() {
   const { setImage, setError, setBusy, undo, redo } = useStore.getState();
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
+  const [hint, setHint] = useState(() => { try { return localStorage.getItem('dii-onboarded') !== '1'; } catch { return true; } });
+  const dismissHint = () => { setHint(false); try { localStorage.setItem('dii-onboarded', '1'); } catch { /* ignore */ } };
 
   const open = async (f: File | undefined | null) => {
     if (!f) return;
     setBusy('Opening photo…'); setError(null);
-    try { setImage(await loadImage(f, f.name)); }
+    try { setImage(await loadImage(f, f.name)); try { void navigator.storage?.persist?.(); } catch { /* optional */ } }
     catch (e) { setError(e instanceof ImageError ? e.message : 'This photo could not be opened.'); }
     finally { setBusy(null); }
   };
@@ -48,6 +50,17 @@ export function App() {
       </header>
       {error && <div className="err" role="alert" data-testid="error">{error}</div>}
       {busy && <div className="note" role="status" style={{ padding: '4px 16px' }}>{busy}</div>}
+      {hint && image && (
+        <div className="panel" role="dialog" aria-label="Quick tips" data-testid="onboarding">
+          <strong>Quick tips</strong>
+          <ul className="note" style={{ margin: '4px 0 8px', paddingLeft: 18 }}>
+            <li>Pick a face in <b>Faces</b>, then use Smooth, Eyes, Makeup and Reshape on it.</li>
+            <li>Hold <b>Compare</b> to see the original; <b>Split</b> lets you drag.</li>
+            <li>Everything runs on this device. Export keeps full resolution and removes location data.</li>
+          </ul>
+          <button className="primary" onClick={dismissHint} data-testid="onboarding-ok">Got it</button>
+        </div>
+      )}
       {image ? <Editor /> : (
         <div className={'start' + (drag ? ' drag' : '')}
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}

@@ -14,3 +14,8 @@ import { refinedAlpha } from './core/background';
 import { editFrom } from './core/edit';
 import { sourceToOut, outputSize, apply } from './core/geometry';
 (window as unknown as { __diiTest: unknown }).__diiTest = { store: useStore, exportImage, detectFaces, segmentPerson, refinedAlpha, loadImage, editFrom, sourceToOut, outputSize, apply };
+
+// Offline: register the service worker in production builds only.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support is optional */ }); });
+}

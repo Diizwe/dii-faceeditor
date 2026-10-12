@@ -107,3 +107,6 @@ Per the plan's rule (a task failing its gate 3 times is cut to its simplest work
 ## Run 11 (2026-10-12 11:17Z): Phase 4, Tier 3 moved to v1.1
 - Background built: `selfie` person model (npm, own origin), from-scratch guided filter, narrow eroded matte, blur / colour / gradient, alpha snapped to 1 above 0.98 so the person's pixels never change (0 changed core px on every group), export replay with exact preview parity. Reviewer scores 3.15/2.73 then 3.2/3.0: halos on dark-on-dark (p10) and white-on-white (p31), no edge colour decontamination, no light wrap. Per the plan (Tier 3 moves to v1.1 if Phase 4 slips) Background and Object erase are deferred; the Background button is hidden unless the URL has `?v11`.
 - Next: Phase 5 (onboarding, offline caching with persistent storage, performance pass).
+
+## Run 12 (2026-10-12 12:04Z): Phase 5 polish
+Service worker (offline reload verified), persistent-storage request, one-time onboarding tips, per-pass profiling hook. Measured with eight tools active on the 2048x1536 preview: slowest pass 43 ms on the software GPU (budget 250), preview textures 240 MB, full-stack 12 MP export peak 78 MB (budget 256). Real-device frame rate (16 ms budget) is for the iPhone checklist.

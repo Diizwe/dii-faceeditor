@@ -381,8 +381,12 @@ export class Renderer {
   }
 
   /** Generic full-screen pass: textures bound to units 0..n by uniform name, scalar/vector uniforms by name. */
+  /** When set, every pass is timed (a 1-pixel readback forces the software GPU to finish) and appended here by pass name, in ms. */
+  profile: Record<string, number[]> | null = null;
+  /** Bytes held by render targets, masks and temporaries (RGBA16F = 8 B/px), for the memory budget. */
+  textureBytes(): number { const t = (x: Target | null) => (x ? x.w * x.h * (this.floatTargets ? 8 : 4) : 0); let n = t(this.work) + t(this.edited) + t(this.alphaTgt); for (const x of this.extra) n += t(x ?? null); for (const m of this.masks.values()) n += t(m.t); return n; }
   private pass(name: string, frag: string, dst: Target, tex: Record<string, WebGLTexture>, uni: Record<string, number | number[]>) {
-    const gl = this.gl, pr = this.prog(name, frag);
+    const gl = this.gl, pr = this.prog(name, frag), t0 = this.profile ? performance.now() : 0;
     gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo); gl.viewport(0, 0, dst.w, dst.h);
     gl.useProgram(pr); gl.bindVertexArray(this.vao);
     let unit = 0;
@@ -393,6 +397,7 @@ export class Renderer {
       else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]); else if (v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]); else if (v.length === 4) gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (this.profile) { gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); (this.profile[name] ??= []).push(performance.now() - t0); }
   }
 
   private temp(i: number, w: number, h: number, mips = false): Target {
