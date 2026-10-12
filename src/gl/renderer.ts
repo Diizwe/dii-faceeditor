@@ -209,10 +209,13 @@ void main(){
   vec3 m = clamp(texelFetch(uMask, p, 0).rgb, 0.0, 1.0);
   if (m.r + m.g + m.b <= 0.0) { o = vec4(c, 1.0); return; }
   vec3 r = c;
-  r = toward(r, uLip, m.r * uOp.x * 1.4);
-  float skinM = clamp(texelFetch(uSkin, p, 0).r, 0.0, 1.0);          // blush only ever lands on skin: never background, hair, beard edge or teeth
-  r = toward(r, uBlush, m.g * skinM * uOp.y * 0.9);
-  r = r * (1.0 - m.b * uOp.z * 1.0);
+  float yc = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float notTeeth = 1.0 - smoothstep(0.55, 0.75, yc);                    // bright pixels inside the lip mask are teeth or highlights: left alone
+  r = toward(r, uLip, m.r * notTeeth * uOp.x * 1.4);
+  float skinM = clamp(texelFetch(uSkin, p, 0).r, 0.0, 1.0);          // blush only lands on skin, and as a multiply so the skin's own undertone and texture stay
+  r *= 1.0 + m.g * m.g * skinM * uOp.y * 1.1 * (vec3(1.10, 0.86, 0.90) - 1.0);
+  float dark = 1.0 - smoothstep(0.1, 0.6, yc);                       // brow fill follows the hair: darker pixels darken more
+  r *= 1.0 - m.b * (0.35 + 0.65 * dark) * uOp.z * 1.6;
   o = vec4(clamp(r, 0.0, 1.0), 1.0);
 }`;
 
@@ -419,7 +422,7 @@ export class Renderer {
       const feather = Math.max(2, 0.015 * face.fw) / 2;
       this.ensureMask('face', face.mask, face.maskKey, feather, w, h);
       if (plan.whiten && face.teeth) this.ensureMask('teeth', face.teeth, face.maskKey, feather, w, h);
-      if (plan.makeup && face.makeup) this.ensureMask('makeup', face.makeup, face.maskKey, feather * 0.5, w, h);
+      if (plan.makeup && face.makeup) this.ensureMask('makeup', face.makeup, face.maskKey, feather * 1.6, w, h);
       if (plan.eyes && face.iris) this.ensureMask('iris', face.iris, face.maskKey, feather * 0.6, w, h);
     }
     if (plan.smooth && face && this.maskTex) {

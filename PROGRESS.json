@@ -6,8 +6,8 @@
   "max_runs": 50,
   "runs_without_passing_commit": 0,
   "lock": {
-    "held_by": "run-9",
-    "acquired_at": "2026-10-12T10:30:14.915586+00:00",
+    "held_by": null,
+    "acquired_at": null,
     "expires_after_hours": 4
   },
   "phases": {
@@ -148,17 +148,17 @@
     {
       "id": "3.2",
       "title": "Makeup (lip, blush, brow)",
-      "status": "objective checks pass; reviewer 3.17 FAIL (blush off the face, lip bleed, brow invisible) -> blush clipped to face-skin mask, lips shrunk, brows stronger; rescore"
+      "status": "objective checks pass; reviewer 3.17 FAIL twice; run 9 reworked blush (multiply, softer, larger feather), lips gated off teeth, brows hair-aware and stronger; needs rescore"
     },
     {
       "id": "3.3",
       "title": "Reshape (TPS warp sliders) incl. straight-lines-at-50% check",
-      "status": "built: TPS warp field + warp pass + tiled export; unit checks pass (min Jacobian > 0.2 at +-100, far px 0, inverse roundtrip < 0.5 px, straight lines <= 0.14% on lines >= 1 fw away); parity preview vs export ok; reviewer 3.75 FAIL (p14 background smear) -> window tightened (0.58 fw + 0.27 fw band), rescore"
+      "status": "reviewer 4.08 PASS overall; MST 5-6 group (p14) 3.5: residue at left shoulder/collar and right temple under stress settings; consider clamping on tilted/close faces"
     },
     {
       "id": "3.4",
       "title": "Liquify brush",
-      "status": "todo"
+      "status": "core done (src/core/liquify.ts: brush kernels, 4 modes, Jacobian guard, 5 unit tests incl. far px 0 and min Jacobian >= 0.29); TODO: renderer pass (reuse WARP with non-square grid), brush UI (modes, size, strength), export replay, parity test, sheets + reviewer"
     }
   ],
   "open_failures": [],

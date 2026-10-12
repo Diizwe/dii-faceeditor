@@ -87,7 +87,7 @@ export function rasterMakeup(mesh: Pt[], fw: number, w: number, h: number, map: 
   const scale = (() => { const [a, b] = [map(0, 0), map(1, 0)]; return Math.hypot(b[0] - a[0], b[1] - a[1]); })();
   const cxm = map(FACE_OVAL.reduce((a, i) => a + mesh[i][0], 0) / FACE_OVAL.length, mesh[1][1])[0];
   g.fillStyle = '#0f0';
-  for (const i of [205, 425]) { const [x, y] = map(mesh[i][0], mesh[i][1]); g.beginPath(); g.ellipse(x + (cxm - x) * 0.12, y - fw * 0.02 * scale, fw * 0.085 * scale, fw * 0.065 * scale, 0, 0, Math.PI * 2); g.fill(); }
+  for (const i of [205, 425]) { const [x, y] = map(mesh[i][0], mesh[i][1]); g.beginPath(); g.ellipse(x + (cxm - x) * 0.15, y - fw * 0.03 * scale, fw * 0.11 * scale, fw * 0.08 * scale, 0, 0, Math.PI * 2); g.fill(); }
   g.fillStyle = '#00f'; path(poly(mesh, BROW_L)); g.fill(); path(poly(mesh, BROW_R)); g.fill();
   return c;
 }
