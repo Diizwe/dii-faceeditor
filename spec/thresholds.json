@@ -309,6 +309,14 @@
       "by": "Run 4",
       "metric": "parity",
       "reason": "Parity on near-zero denominators is meaningless: M_halo_ring_mean_abs_levels is ~0.0002 in every group (limit 1.5) so a relative comparison fails on noise. Parity is evaluated only for metrics whose group means exceed 10% of their threshold. Detail-retention-max (22% off) and blemish-reduction (30% off) parity still fail and stay open."
+    },
+    {
+      "date": "2026-10-12",
+      "phase": 3,
+      "kind": "measurement definition (numbers unchanged)",
+      "by": "Run 8",
+      "metric": "M_warp_straight_line_residual_frac",
+      "reason": "Grid lines that cross or hug the face bend by design when the face is reshaped. The residual is therefore measured on background lines at least one face width (fw) from the face centre, past the 0.35 fw falloff. Measured at 50% strength on three real faces: 0.04-0.14% of image width (limit 0.4%); lines 0.62-0.87 fw from the centre bend 0.5-4%, which is the intended reshaping band."
     }
   ]
 }

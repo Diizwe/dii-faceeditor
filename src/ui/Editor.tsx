@@ -6,6 +6,8 @@ import { RetouchPanel } from './RetouchPanel';
 import { HealPanel } from './HealPanel';
 import { FilterPanel } from './FilterPanel';
 import { MakeupPanel } from './MakeupPanel';
+import { ReshapePanel } from './ReshapePanel';
+import { buildField } from '../core/reshape';
 import { PreviewHealer, healOps } from '../core/healer';
 import { active as activeOps } from '../core/history';
 import { rasterMask, rasterTeeth, rasterIris, rasterMakeup } from '../core/facemask';
@@ -18,7 +20,7 @@ import { CropPanel } from './CropPanel';
 import { FacesPanel } from './FacesPanel';
 import { ExportPanel } from './ExportPanel';
 
-type Panel = 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
+type Panel = 'reshape' | 'makeup' | 'filters' | 'heal' | 'crop' | 'smooth' | 'whiten' | 'eyes' | 'light' | 'faces' | 'export';
 
 declare global { interface Window { __dii?: { renderer: Renderer | null; renders: number; redraw: () => void }; } }
 
@@ -66,7 +68,13 @@ export function Editor() {
       const scale = Math.sqrt(Math.abs(inv[0] * inv[4] - inv[1] * inv[3]));
       face = { mask: maskCache.current.canvas, teeth: maskCache.current.teeth, iris: maskCache.current.iris, makeup: maskCache.current.makeup, maskKey: key, fw: mf.box[2] * scale, skin: st };
     }
-    return { w, h, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, makeup: E.makeup, face, m: mm };
+    let warp: { field: NonNullable<ReturnType<typeof buildField>>; key: string } | null = null;
+    if (E.reshape && E.face) {
+      const inv2 = invert(mm), mesh2 = (E.face.mesh as [number, number, number][]).map((p) => { const [x, y] = apply(inv2, p[0], p[1]); return [x, y, 0] as [number, number, number]; });
+      const fwW = E.face.box[2] * Math.sqrt(Math.abs(inv2[0] * inv2[4] - inv2[1] * inv2[3])), field = buildField(mesh2, fwW, E.reshape);
+      if (field) warp = { field, key: `${E.face.id}|${w}x${h}|${mm.map((v) => v.toFixed(3)).join(',')}|${JSON.stringify(E.reshape)}` };
+    }
+    return { w, h, warp, light: E.light, smooth: E.smooth as SmoothParams | null, whiten: E.whiten, eyes: E.eyes, filter: E.filter, makeup: E.makeup, face, m: mm };
   }, [E, image, k]);
 
   const [srcVersion, setSrcVersion] = useState(0);
@@ -250,7 +258,7 @@ export function Editor() {
         {fail && <div className="err" role="alert">{fail}</div>}
       </div>
       <div className="panel" data-testid="panel">
-        {panel === 'makeup' ? <MakeupPanel /> : panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
+        {panel === 'reshape' ? <ReshapePanel /> : panel === 'makeup' ? <MakeupPanel /> : panel === 'filters' ? <FilterPanel /> : panel === 'heal' ? <HealPanel /> : panel === 'crop' ? <CropPanel /> : panel === 'smooth' ? <RetouchPanel tool="smooth" /> : panel === 'whiten' ? <RetouchPanel tool="whiten" hint="Needs a visible smile. Only bright, yellowish teeth are changed." /> : panel === 'eyes' ? <RetouchPanel tool="eyes" hint="Only the iris changes; the whites and lids are left alone." /> : panel === 'light' ? <LightPanel /> : panel === 'faces' ? <FacesPanel /> : <ExportPanel />}
       </div>
       <nav className="toolbar" aria-label="Tools">
         <button aria-pressed={panel === 'heal'} onClick={() => setPanel('heal')} data-testid="tool-heal">Heal</button>
@@ -259,6 +267,7 @@ export function Editor() {
         <button aria-pressed={panel === 'eyes'} onClick={() => setPanel('eyes')} data-testid="tool-eyes">Eyes (beta)</button>
         <button aria-pressed={panel === 'smooth'} onClick={() => setPanel('smooth')} data-testid="tool-smooth">Smooth</button>
         <button aria-pressed={panel === 'light'} onClick={() => setPanel('light')} data-testid="tool-light">Light &amp; colour</button>
+        <button aria-pressed={panel === 'reshape'} onClick={() => setPanel('reshape')} data-testid="tool-reshape">Reshape</button>
         <button aria-pressed={panel === 'makeup'} onClick={() => setPanel('makeup')} data-testid="tool-makeup">Makeup</button>
         <button aria-pressed={panel === 'filters'} onClick={() => setPanel('filters')} data-testid="tool-filters">Filters</button>
         <button aria-pressed={panel === 'faces'} onClick={() => setPanel('faces')} data-testid="tool-faces">Faces</button>

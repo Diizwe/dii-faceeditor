@@ -2,6 +2,14 @@
 export interface Control { tool: string; id: string; label: string; min: number; max: number; step: number; default: number; unit?: string; }
 
 export const CONTROLS: Control[] = [
+  { tool: 'reshape', id: 'jaw', label: 'Jaw width', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'chin', label: 'Chin length', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'noseW', label: 'Nose width', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'noseL', label: 'Nose length', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'eyeSize', label: 'Eye size', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'eyeDist', label: 'Eye distance', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'lips', label: 'Lip fullness', min: -100, max: 100, step: 1, default: 0 },
+  { tool: 'reshape', id: 'faceW', label: 'Face width', min: -100, max: 100, step: 1, default: 0 },
   { tool: 'makeup', id: 'lip', label: 'Lip tint', min: 0, max: 60, step: 1, default: 24 },
   { tool: 'makeup', id: 'blush', label: 'Blush', min: 0, max: 60, step: 1, default: 20 },
   { tool: 'makeup', id: 'brow', label: 'Brow fill', min: 0, max: 60, step: 1, default: 20 },

@@ -182,6 +182,8 @@ if (!only || only === 'parity') {
   const cases = {
     smooth: [{ tool: 'smooth', params: { strength: 60, soften: 30, face: null } }],
     light: [{ tool: 'light', params: { exposure: 0.4, contrast: 25, warmth: 30, saturation: 20 } }],
+    reshape: [{ tool: 'reshape', params: { jaw: 60, chin: 40, noseW: 50, noseL: 30, eyeSize: 40, eyeDist: 20, lips: 40, faceW: 50 } }],
+    makeupfilter: [{ tool: 'makeup', params: { lip: 30, blush: 25, brow: 25, colour: 1, face: null } }, { tool: 'filters', params: { look: 4, strength: 50 } }],
     combo: [{ tool: 'geometry', params: { rot90: 0, flipH: false, flipV: false, angle: 6, aspect: 0.8 } }, { tool: 'smooth', params: { strength: 40, soften: 30, face: null } }, { tool: 'light', params: { exposure: -0.2, contrast: 10, warmth: -20, saturation: 10 } }],
   };
   const M = T.metrics;
@@ -190,7 +192,7 @@ if (!only || only === 'parity') {
     for (const file of files) {
       const r = await page.evaluate(async ({ file, ops }) => {
         await window.H.setFace(file); const st = window.__diiTest.store.getState();
-        const o = ops.map((op) => (op.tool === 'smooth' ? { ...op, params: { ...op.params, face: st.activeFace } } : op));
+        const o = ops.map((op) => (op.tool === 'smooth' || op.tool === 'makeup' ? { ...op, params: { ...op.params, face: st.activeFace } } : op));
         const geo = (o.find((x) => x.tool === 'geometry') || { params: { rot90: 0, flipH: false, flipV: false, angle: 0, aspect: null } }).params;
         return window.H.parity(geo, o);
       }, { file, ops });
@@ -367,7 +369,10 @@ if (!only || only === 'compare') {
 if (only === 'sheets') {
   const outDir = process.env.SHEETS_DIR || '/tmp/claude-0/sheets'; fs.mkdirSync(outDir, { recursive: true });
   const ids = (process.env.SHEET_IDS || 'p05,p03,p10,p14,p21,p23,p28,p31').split(',');
-  const tools = { smooth: { tool: 'smooth', params: { strength: 60, soften: 30 }, label: 'Smooth 60' }, light: { tool: 'light', params: { exposure: 0.3, contrast: 20, warmth: 25, saturation: 15 }, label: 'Light & colour' }, whiten: { tool: 'whiten', params: { strength: 100 }, label: 'Whiten 100' }, eyes: { tool: 'eyes', params: { brighten: 60, clarity: 60 }, label: 'Eyes 60/60' } };
+  const tools = { smooth: { tool: 'smooth', params: { strength: 60, soften: 30 }, label: 'Smooth 60' }, light: { tool: 'light', params: { exposure: 0.3, contrast: 20, warmth: 25, saturation: 15 }, label: 'Light & colour' }, whiten: { tool: 'whiten', params: { strength: 100 }, label: 'Whiten 100' }, eyes: { tool: 'eyes', params: { brighten: 60, clarity: 60 }, label: 'Eyes 60/60' },
+    reshape: { tool: 'reshape', params: { jaw: 60, chin: 40, noseW: 50, noseL: 0, eyeSize: 40, eyeDist: 0, lips: 40, faceW: 50 }, label: 'Reshape 60/40/50/40/40/50' },
+    makeup: { tool: 'makeup', params: { lip: 30, blush: 25, brow: 25, colour: 1 }, label: 'Makeup coral 30/25/25' },
+    filters: { tool: 'filters', params: { look: 4, strength: 60 }, label: 'Filter Film 60' } };
   for (const [name, spec] of Object.entries(tools)) {
     const tiles = [];
     for (const id of ids) {
